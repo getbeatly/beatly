@@ -13,6 +13,12 @@ export interface SuperColliderServerState {
   readonly bar: number;
   readonly running: boolean;
   readonly profiles: readonly string[];
+  readonly lastAgentEvent?: string | null;
+}
+
+export interface SuperColliderAgentEventPayload {
+  readonly event: string;
+  readonly seed?: number;
 }
 
 export interface SuperColliderHelloAdapterOptions {
@@ -108,6 +114,10 @@ export class SuperColliderHelloAdapter {
     });
   }
 
+  public async sendAgentEvent(payload: SuperColliderAgentEventPayload): Promise<SuperColliderServerState> {
+    return this.postAgent(payload);
+  }
+
   public async panic(): Promise<void> {
     const response = await fetch(`${this.baseUrl}/api/panic`, {
       method: "POST",
@@ -152,6 +162,21 @@ export class SuperColliderHelloAdapter {
 
     if (!response.ok) {
       throw new Error(`Failed to control SuperCollider server: ${response.status} ${response.statusText}`);
+    }
+
+    const payload = (await response.json()) as { readonly state?: SuperColliderServerState };
+    return payload.state ?? this.getState();
+  }
+
+  private async postAgent(body: SuperColliderAgentEventPayload): Promise<SuperColliderServerState> {
+    const response = await fetch(`${this.baseUrl}/api/agent`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to send agent event: ${response.status} ${response.statusText}`);
     }
 
     const payload = (await response.json()) as { readonly state?: SuperColliderServerState };
