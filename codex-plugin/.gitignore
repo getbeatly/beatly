@@ -1,0 +1,11 @@
+dist/
+supercollider/
+skills/
+node_modules/
+package.json
+package-lock.json
+LICENSE
+!.codex-plugin/
+!.codex-plugin/plugin.json
+!README.md
+!.gitignore

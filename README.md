@@ -103,6 +103,63 @@ After install, pi discovers the skill automatically from the package manifest an
 /skill:beatly
 ```
 
+## Codex plugin install
+
+Beatly also supports Codex through a local plugin build that follows Codex's plugin and marketplace format.
+
+Build the self-contained local plugin:
+
+```bash
+npm run build:codex-plugin
+```
+
+That produces a local plugin under:
+
+```text
+./codex-plugin
+```
+
+For a repo-scoped Codex install, copy it into your repo and register it in a local marketplace:
+
+```bash
+mkdir -p ./.agents/plugins ./plugins
+cp -R /absolute/path/to/beatly/codex-plugin ./plugins/beatly
+```
+
+Create or update `./.agents/plugins/marketplace.json`:
+
+```json
+{
+  "name": "local-beatly",
+  "interface": {
+    "displayName": "Local Beatly Plugins"
+  },
+  "plugins": [
+    {
+      "name": "beatly",
+      "source": {
+        "source": "local",
+        "path": "./plugins/beatly"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
+```
+
+Then restart Codex, open the plugin directory, choose the local marketplace, and install `Beatly`.
+
+The generated Codex plugin is self-contained and includes:
+
+- `skills/beatly`
+- `dist/`
+- `supercollider/`
+- runtime `node_modules/`
+
 ## Agent skill shape
 
 The skill now supports:

@@ -47,6 +47,7 @@
     "sc:live": "sclang supercollider/play_beat.scd",
     "sc:generate": "sclang supercollider/generate.scd",
     "event": "npm run build && node dist/cli.js",
+    "build:codex-plugin": "node scripts/build-codex-plugin.mjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
