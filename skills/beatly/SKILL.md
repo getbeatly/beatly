@@ -93,13 +93,17 @@ Arguments for `update.sh`:
 
 ```bash
 /home/yuval/dev/beatly/skills/beatly/override.sh lofi true
-/home/yuval/dev/beatly/skills/beatly/override.sh ambient true 12345
+/home/yuval/dev/beatly/skills/beatly/override.sh lofi.night true
+/home/yuval/dev/beatly/skills/beatly/override.sh ambient true 12345 cathedral
 ```
 
 Arguments for `override.sh`:
-1. genre (see list below)
+1. genre (`lofi`) or full `genre.variant` (`lofi.night`)
 2. running: `true|false`
 3. seed: optional integer
+4. variant: optional (if not already baked into arg 1)
+
+Each genre has several named variants (e.g. `lofi` → `classic`, `night`, `crate`, `sunday`, `jazzy`, `tape`). Inspect them via `./state.sh` — the response includes a `genres` array with each genre's variants.
 
 ### Inspect state
 
@@ -111,19 +115,22 @@ Returns JSON of shape:
 
 ```json
 {
-  "profile": "sunsetGroove",
+  "profile": "sunsetGroove.golden",
+  "genre": "sunsetGroove",
+  "variant": "golden",
   "seed": 701337117,
-  "bpm": 102,
+  "bpm": 108,
   "bar": 1,
   "running": true,
-  "profiles": ["ambient", "calming", "deepFocus", "lofi", "jazzNoir", "techno",
-               "dnb", "dub", "uplift", "neoSoul", "dreamPop", "soulHop", "cityPop",
-               "bossaNova", "chillHouse", "rainyPiano", "sunsetGroove"],
+  "profiles": ["ambient.classic", "ambient.abyss", "..."],
+  "genres": [
+    { "id": "lofi", "defaultVariant": "classic", "variants": ["classic", "night", "crate", "sunday", "jazzy", "tape"] }
+  ],
   "lastAgentEvent": null
 }
 ```
 
-The `profiles` array is the canonical list of valid genres for `override.sh`.
+The `genres` array is the canonical list of valid genres and their variants. The `profiles` array lists every `genre.variant` combination directly.
 
 ## Preferred behavior
 

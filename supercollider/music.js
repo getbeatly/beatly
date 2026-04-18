@@ -76,11 +76,43 @@ function voiceLead(chord, prevTop, lo = 60, hi = 84) {
   return candidates[0];
 }
 
-// ---------- profiles (genres) ----------
-// drumPattern values are velocities 0..1 per 16th step (16 steps = 1 bar).
-// reverb: { room 0..1, damp 0..1, mix } — passed to /n_set on the reverb synth.
-// delay:  { beats, fb, mix } — beats converted to seconds at runtime.
-export const PROFILES = {
+// ---------- genres + variants ----------
+//
+// Each genre has a BASE profile (shape below) plus a map of VARIANTS that
+// shallow-merge over the base. `pad`, `reverb`, `delay`, and `drumPattern` are
+// deep-merged so a variant can tweak one field without redeclaring the whole
+// block. The first variant listed is the default for the genre.
+//
+// Profile shape:
+//   tonic, scale, bpm, progressions, chordExt, barsPerChord,
+//   drumPattern { kick|snare|clap|hat|ride|rim: [16 velocities 0..1] },
+//   bassStyle ('driving'|'rootSparse'|'rootGroove'|'walk'|'sub'|'none'),
+//   leadDensity 0..1, shimmerRate int, swing 0..0.25,
+//   pad { warmth 0..1, sub 0..1, amp },
+//   reverb { room 0..1, damp 0..1, mix },
+//   delay { beats, fb, mix }.
+
+function mergeProfile(base, delta) {
+  const out = { ...base, ...delta };
+  if (base.pad || delta.pad) out.pad = { ...(base.pad ?? {}), ...(delta.pad ?? {}) };
+  if (base.reverb || delta.reverb) out.reverb = { ...(base.reverb ?? {}), ...(delta.reverb ?? {}) };
+  if (base.delay || delta.delay) out.delay = { ...(base.delay ?? {}), ...(delta.delay ?? {}) };
+  if (delta.drumPattern === null) {
+    delete out.drumPattern;
+  } else if (delta.drumPattern) {
+    const merged = { ...(base.drumPattern ?? {}), ...delta.drumPattern };
+    // Allow variants to remove a drum role by setting it to null.
+    for (const role of Object.keys(merged)) {
+      if (merged[role] == null) delete merged[role];
+    }
+    out.drumPattern = merged;
+  }
+  if (delta.progressions) out.progressions = delta.progressions;
+  return out;
+}
+
+// ---------- BASE profiles (one per genre) ----------
+const BASES = {
   ambient: {
     tonic: 60, scale: 'lydian', bpm: 60,
     progressions: [[1,3,4,1],[1,4,5,4],[1,6,4,5]],
@@ -373,9 +405,248 @@ export const PROFILES = {
   },
 };
 
+// ---------- VARIANTS (deltas from each base) ----------
+// The first variant key in each genre is the default.
+const VARIANTS = {
+  ambient: {
+    classic:   {},
+    abyss:     { tonic: 48, scale: 'aeolian', reverb: { mix: 1.9 } },
+    cathedral: { bpm: 54, reverb: { room: 0.98, mix: 2.4 }, delay: { beats: 1.5, fb: 0.65, mix: 0.7 } },
+    glacial:   { bpm: 48, shimmerRate: 3, pad: { amp: 0.075 } },
+    pastoral:  { tonic: 64, scale: 'lydian', pad: { warmth: 0.95 } },
+    voidwalk:  { tonic: 45, scale: 'phrygian', bpm: 56, reverb: { mix: 2.1 } },
+  },
+
+  calming: {
+    classic:   {},
+    warmth:    { chordExt: 'ninth', pad: { warmth: 0.95, amp: 0.08 } },
+    rain:      { shimmerRate: 6, delay: { beats: 0.5, fb: 0.55, mix: 0.5 } },
+    cloudland: { bpm: 58, barsPerChord: 8 },
+    hymn:      { scale: 'majorPentatonic', tonic: 67, chordExt: 'seventh' },
+    mist:      { tonic: 62, scale: 'dorian', pad: { warmth: 0.82 } },
+  },
+
+  deepFocus: {
+    dorian:   {},
+    phrygian: { scale: 'phrygian', tonic: 50 },
+    minimal:  { drumPattern: null, leadDensity: 0.15, shimmerRate: 1 },
+    driving:  {
+      drumPattern: {
+        kick:  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+        hat:   [0.6,0,0.45,0, 0.6,0,0.45,0, 0.6,0,0.45,0, 0.6,0,0.45,0.4],
+      },
+      bassStyle: 'driving',
+    },
+    pulse:    { bpm: 92, swing: 0 },
+    nocturne: { tonic: 48, scale: 'aeolian', bpm: 78, pad: { warmth: 0.7 } },
+  },
+
+  lofi: {
+    classic: {},
+    night:   { tonic: 53, bpm: 72, pad: { warmth: 0.85 } },
+    crate:   { swing: 0.22, pad: { warmth: 0.8 }, reverb: { damp: 0.6 } },
+    sunday:  { scale: 'majorPentatonic', tonic: 60, chordExt: 'ninth' },
+    jazzy:   { chordExt: 'ninth', swing: 0.2, scale: 'dorian' },
+    tape:    { bpm: 74, pad: { warmth: 0.88 }, delay: { fb: 0.55, mix: 0.5 } },
+  },
+
+  jazzNoir: {
+    classic:  {},
+    ballad:   { bpm: 72, chordExt: 'ninth', leadDensity: 0.35 },
+    uptempo:  { bpm: 132, leadDensity: 0.6 },
+    rhodes:   { pad: { warmth: 0.88 }, chordExt: 'eleventh' },
+    blue:     { scale: 'blues', chordExt: 'seventh' },
+    afterhours: { tonic: 46, bpm: 84, pad: { warmth: 0.82 } },
+  },
+
+  techno: {
+    driving: {},
+    dub:     { bpm: 124, delay: { beats: 0.75, fb: 0.7, mix: 0.7 }, reverb: { mix: 0.9 } },
+    melodic: { scale: 'aeolian', chordExt: 'seventh', leadDensity: 0.3, tonic: 48 },
+    acid:    { leadDensity: 0.65, pad: { warmth: 0.35 } },
+    minimal: {
+      drumPattern: {
+        kick: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+        hat:  [0,0,0.6,0, 0,0,0.6,0, 0,0,0.6,0, 0,0,0.6,0.3],
+        clap: null,
+      },
+      leadDensity: 0,
+    },
+    peak:    { bpm: 134, leadDensity: 0.2 },
+  },
+
+  dnb: {
+    classic:      {},
+    liquid:       { tonic: 48, scale: 'dorian', pad: { warmth: 0.78 }, chordExt: 'ninth' },
+    neuro:        { tonic: 43, pad: { warmth: 0.4 }, leadDensity: 0.3 },
+    jungle:       {
+      bpm: 162,
+      drumPattern: {
+        kick:  [1,0,0,0.4, 0,0,0.7,0, 0,0,1,0, 0,0.5,0,0],
+        snare: [0,0,0,0, 1,0,0,0.5, 0,0,0,0, 1,0,0.4,0],
+        hat:   [0.6,0.4,0.7,0.3, 0.6,0.4,0.7,0.5, 0.6,0.4,0.7,0.3, 0.6,0.4,0.7,0.5],
+      },
+    },
+    atmospheric:  { leadDensity: 0.1, shimmerRate: 4, pad: { warmth: 0.82 } },
+    halftime:     { bpm: 86, chordExt: 'ninth' },
+  },
+
+  dub: {
+    classic:     {},
+    roots:       { bpm: 68, scale: 'dorian', pad: { warmth: 0.82 } },
+    echo:        { delay: { beats: 1.0, fb: 0.78, mix: 0.85 }, reverb: { mix: 1.8 } },
+    stepper:     {
+      drumPattern: {
+        kick:  [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
+        snare: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+        hat:   [0,0,0.6,0, 0,0,0.6,0, 0,0,0.6,0, 0,0,0.6,0.4],
+      },
+    },
+    meditative:  { bpm: 62, leadDensity: 0.05 },
+    digital:     { tonic: 48, scale: 'phrygian', leadDensity: 0.2 },
+  },
+
+  uplift: {
+    classic:   {},
+    euphoric:  { bpm: 128, chordExt: 'ninth', leadDensity: 0.6 },
+    anthem:    { leadDensity: 0.7, pad: { warmth: 0.7 } },
+    gospel:    { scale: 'majorPentatonic', chordExt: 'seventh' },
+    dawn:      { bpm: 108, pad: { warmth: 0.75 } },
+    stadium:   { bpm: 126, chordExt: 'seventh', reverb: { mix: 0.8 } },
+  },
+
+  neoSoul: {
+    classic: {},
+    dusty:   { swing: 0.22, pad: { warmth: 0.88 } },
+    smooth:  { bpm: 78, chordExt: 'ninth', pad: { warmth: 0.85 } },
+    rhodes:  { pad: { warmth: 0.92 }, chordExt: 'thirteenth' },
+    funk:    { bpm: 96, leadDensity: 0.5, swing: 0.1 },
+    amber:   { tonic: 56, scale: 'mixolydian', chordExt: 'ninth' },
+  },
+
+  dreamPop: {
+    classic:  {},
+    shoegaze: { shimmerRate: 6, reverb: { room: 0.96, mix: 1.6 }, pad: { warmth: 0.95 } },
+    bedroom:  { bpm: 64, leadDensity: 0.12 },
+    summer:   { tonic: 64, pad: { warmth: 0.9 } },
+    winter:   { tonic: 60, scale: 'aeolian', pad: { warmth: 0.82 } },
+    nocturne: { tonic: 58, scale: 'dorian', bpm: 68 },
+  },
+
+  soulHop: {
+    classic:  {},
+    boombap:  { bpm: 92, swing: 0.14 },
+    buttery:  { bpm: 80, chordExt: 'thirteenth', pad: { warmth: 0.88 } },
+    jazzy:    { chordExt: 'ninth', scale: 'dorian' },
+    midnight: { tonic: 53, pad: { warmth: 0.8 } },
+    sunday:   { scale: 'majorPentatonic', tonic: 60, bpm: 86 },
+  },
+
+  cityPop: {
+    classic: {},
+    tokyo:   { bpm: 116, chordExt: 'thirteenth' },
+    neon:    { bpm: 120, leadDensity: 0.55, pad: { warmth: 0.75 } },
+    coastal: { bpm: 104, pad: { warmth: 0.85 } },
+    sunset:  { tonic: 58, bpm: 102, scale: 'mixolydian' },
+    drive:   { bpm: 114, bassStyle: 'driving', leadDensity: 0.5 },
+  },
+
+  bossaNova: {
+    classic: {},
+    samba:   { bpm: 112, leadDensity: 0.32 },
+    gentle:  { bpm: 80, pad: { warmth: 0.8 } },
+    blue:    { scale: 'aeolian', chordExt: 'ninth' },
+    rio:     { bpm: 100, swing: 0.12 },
+    jobim:   { chordExt: 'eleventh', leadDensity: 0.28 },
+  },
+
+  chillHouse: {
+    classic: {},
+    deep:    { tonic: 53, scale: 'dorian', chordExt: 'ninth', pad: { warmth: 0.8 } },
+    beach:   { scale: 'majorPentatonic', tonic: 62, pad: { warmth: 0.85 } },
+    sunset:  { bpm: 110 },
+    rooftop: { bpm: 124, leadDensity: 0.4 },
+    balearic:{ bpm: 114, chordExt: 'ninth', pad: { warmth: 0.82 } },
+  },
+
+  rainyPiano: {
+    classic:  {},
+    midnight: { tonic: 58, scale: 'aeolian', pad: { warmth: 0.82 } },
+    morning:  { tonic: 67, scale: 'lydian' },
+    moss:     { bpm: 56 },
+    stormy:   { shimmerRate: 5, reverb: { mix: 1.5 } },
+    hymn:     { scale: 'ionian', chordExt: 'seventh' },
+  },
+
+  sunsetGroove: {
+    classic:    {},
+    beach:      { tonic: 58, scale: 'majorPentatonic', pad: { warmth: 0.85 } },
+    dusk:       { bpm: 90, pad: { warmth: 0.82 } },
+    golden:     { bpm: 108, chordExt: 'thirteenth' },
+    saltwater:  { bpm: 94, scale: 'dorian' },
+    boardwalk:  { bpm: 106, leadDensity: 0.42 },
+  },
+};
+
+// ---------- derive flat PROFILES + catalog ----------
+function buildProfiles() {
+  const profiles = {};
+  const genres = {};
+  for (const [genreId, base] of Object.entries(BASES)) {
+    const variantMap = VARIANTS[genreId];
+    if (!variantMap) throw new Error(`Missing variants for genre ${genreId}`);
+    const variantIds = Object.keys(variantMap);
+    if (variantIds.length === 0) throw new Error(`Genre ${genreId} has no variants`);
+    const defaultVariant = variantIds[0];
+    const builtVariants = {};
+    for (const vid of variantIds) {
+      const profile = mergeProfile(base, variantMap[vid]);
+      const key = `${genreId}.${vid}`;
+      profiles[key] = profile;
+      builtVariants[vid] = profile;
+    }
+    // short-form alias: `"lofi"` → default variant profile
+    profiles[genreId] = profiles[`${genreId}.${defaultVariant}`];
+    genres[genreId] = {
+      id: genreId,
+      defaultVariant,
+      variantIds,
+      variants: builtVariants,
+    };
+  }
+  return { profiles, genres };
+}
+
+const { profiles: BUILT_PROFILES, genres: BUILT_GENRES } = buildProfiles();
+
+export const PROFILES = BUILT_PROFILES;
+export const GENRES = BUILT_GENRES;
+
+export function listProfileIds() {
+  // genre.variant keys only (excludes the short-form aliases)
+  return Object.keys(PROFILES).filter((k) => k.includes('.'));
+}
+
+export function resolveProfileId(genreId, variantId) {
+  if (!genreId) return null;
+  if (genreId.includes('.')) return PROFILES[genreId] ? genreId : null;
+  const meta = GENRES[genreId];
+  if (!meta) return null;
+  const v = variantId && meta.variantIds.includes(variantId) ? variantId : meta.defaultVariant;
+  return `${genreId}.${v}`;
+}
+
+export function splitProfileId(profileId) {
+  const [genreId, variantId] = profileId.split('.');
+  return { genreId, variantId: variantId ?? GENRES[genreId]?.defaultVariant ?? null };
+}
+
+
+
 // ---------- per-bar generator ----------
 export function makeGenerator(profileId, seed) {
-  const profile = PROFILES[profileId];
+  const key = resolveProfileId(profileId) ?? profileId;
+  const profile = PROFILES[key];
   if (!profile) throw new Error(`unknown profile ${profileId}`);
   const rng = makeRng(seed);
   const progression = pickFrom(rng, profile.progressions);

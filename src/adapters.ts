@@ -8,11 +8,18 @@ import type { BeatlyGenreId } from "./genres.js";
 
 export interface SuperColliderServerState {
   readonly profile: string;
+  readonly genre?: string;
+  readonly variant?: string;
   readonly seed: number;
   readonly bpm: number | null;
   readonly bar: number;
   readonly running: boolean;
   readonly profiles: readonly string[];
+  readonly genres?: readonly {
+    readonly id: string;
+    readonly defaultVariant: string;
+    readonly variants: readonly string[];
+  }[];
   readonly lastAgentEvent?: string | null;
 }
 
@@ -98,6 +105,14 @@ export class SuperColliderHelloAdapter {
     return this.postControl({ profile, seed });
   }
 
+  public async setGenre(genre: BeatlyGenreId, variant?: string, seed?: number): Promise<SuperColliderServerState> {
+    return this.postControl({ genre, variant, seed });
+  }
+
+  public async setVariant(variant: string): Promise<SuperColliderServerState> {
+    return this.postControl({ variant });
+  }
+
   public async setRunning(running: boolean): Promise<SuperColliderServerState> {
     return this.postControl({ running });
   }
@@ -107,8 +122,9 @@ export class SuperColliderHelloAdapter {
   }
 
   public async applyDirective(directive: BeatlyPlaybackDirective): Promise<SuperColliderServerState> {
+    const profile = directive.variant ? `${directive.genre}.${directive.variant}` : directive.genre;
     return this.postControl({
-      profile: directive.genre,
+      profile,
       seed: directive.seed,
       running: directive.running,
     });

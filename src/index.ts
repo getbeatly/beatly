@@ -1,6 +1,6 @@
 import { BEATLY_GENRES, DEFAULT_GENRE, type BeatlyGenre, type BeatlyGenreId } from "./genres.js";
 
-export { BEATLY_GENRES, DEFAULT_GENRE, getGenre, type BeatlyGenre, type BeatlyGenreId } from "./genres.js";
+export { BEATLY_GENRES, DEFAULT_GENRE, getGenre, getVariant, resolveProfileId, type BeatlyGenre, type BeatlyGenreId, type BeatlyVariant } from "./genres.js";
 export { ConsoleDirectiveAdapter, SuperColliderHelloAdapter, type SuperColliderHelloAdapterOptions, type SuperColliderServerState } from "./adapters.js";
 
 export interface BeatlyAgentSignal {
@@ -15,6 +15,7 @@ export interface BeatlySession {
   readonly agentId: string;
   readonly startedAt: Date;
   readonly genre: BeatlyGenreId;
+  readonly variant: string;
   readonly intensity: number;
   readonly seed: number;
   readonly running: boolean;
@@ -22,6 +23,7 @@ export interface BeatlySession {
 
 export interface BeatlyPlaybackDirective {
   readonly genre: BeatlyGenreId;
+  readonly variant: string;
   readonly intensity: number;
   readonly seed: number;
   readonly running: boolean;
@@ -32,6 +34,7 @@ export interface BeatlyPlaybackDirective {
 
 export interface BeatlyPlaybackOverride {
   readonly genre?: BeatlyGenreId;
+  readonly variant?: string;
   readonly intensity?: number;
   readonly seed?: number;
   readonly running?: boolean;
@@ -54,6 +57,7 @@ export interface StartSessionOptions {
   readonly agentId: string;
   readonly sessionId?: string;
   readonly initialGenre?: BeatlyGenreId;
+  readonly initialVariant?: string;
   readonly initialIntensity?: number;
   readonly running?: boolean;
 }
@@ -90,11 +94,13 @@ export class BeatlyConductor {
       throw new Error("Beatly session already active.");
     }
 
+    const initialGenre = options.initialGenre ?? DEFAULT_GENRE;
     const session: BeatlySession = {
       sessionId: options.sessionId ?? generateSessionId(),
       agentId: options.agentId,
       startedAt: new Date(),
-      genre: options.initialGenre ?? DEFAULT_GENRE,
+      genre: initialGenre,
+      variant: pickVariant(initialGenre, options.initialVariant),
       intensity: clamp01(options.initialIntensity ?? 0.5),
       seed: this.seedFactory(),
       running: options.running ?? true,
@@ -104,11 +110,12 @@ export class BeatlyConductor {
 
     await this.dispatch({
       genre: session.genre,
+      variant: session.variant,
       intensity: session.intensity,
       seed: session.seed,
       running: session.running,
       reason: "session.started",
-      summary: `Start ${session.genre} at intensity ${session.intensity.toFixed(2)}`,
+      summary: `Start ${session.genre}.${session.variant} at intensity ${session.intensity.toFixed(2)}`,
       timestamp: new Date(),
     });
 
@@ -121,8 +128,14 @@ export class BeatlyConductor {
     }
 
     const recommendation = recommendPlayback(signal);
+    // Preserve current variant when recommending inside the same genre;
+    // otherwise fall back to the target genre's default variant.
+    const nextVariant = recommendation.genre.id === this.session.genre
+      ? this.session.variant
+      : recommendation.genre.defaultVariant;
     const nextDirective: BeatlyPlaybackDirective = {
       genre: recommendation.genre.id,
+      variant: nextVariant,
       intensity: recommendation.intensity,
       seed: this.session.seed,
       running: true,
@@ -134,6 +147,7 @@ export class BeatlyConductor {
     this.session = {
       ...this.session,
       genre: nextDirective.genre,
+      variant: nextDirective.variant,
       intensity: nextDirective.intensity,
       running: nextDirective.running,
     };
@@ -147,8 +161,13 @@ export class BeatlyConductor {
       throw new Error("No active Beatly session.");
     }
 
+    const nextGenre = override.genre ?? this.session.genre;
+    const nextVariant = nextGenre === this.session.genre
+      ? pickVariant(nextGenre, override.variant ?? this.session.variant)
+      : pickVariant(nextGenre, override.variant);
     const directive: BeatlyPlaybackDirective = {
-      genre: override.genre ?? this.session.genre,
+      genre: nextGenre,
+      variant: nextVariant,
       intensity: clamp01(override.intensity ?? this.session.intensity),
       seed: override.seed ?? this.session.seed,
       running: override.running ?? this.session.running,
@@ -160,6 +179,7 @@ export class BeatlyConductor {
     this.session = {
       ...this.session,
       genre: directive.genre,
+      variant: directive.variant,
       intensity: directive.intensity,
       seed: directive.seed,
       running: directive.running,
@@ -176,6 +196,7 @@ export class BeatlyConductor {
 
     const directive: BeatlyPlaybackDirective = {
       genre: this.session.genre,
+      variant: this.session.variant,
       intensity: this.session.intensity,
       seed: this.session.seed,
       running: false,
@@ -283,6 +304,14 @@ function generateSessionId(): string {
   return `beatly_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function pickVariant(genreId: BeatlyGenreId, requested?: string): string {
+  const genre = genreById(genreId);
+  if (requested && genre.variants.some((entry) => entry.id === requested)) {
+    return requested;
+  }
+  return genre.defaultVariant;
+}
+
 function clamp01(value: number): number {
   if (Number.isNaN(value)) {
     return 0;
@@ -291,4 +320,4 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-export const BEATLY_CORE_VERSION = "0.2.0" as const;
+export const BEATLY_CORE_VERSION = "0.3.0" as const;

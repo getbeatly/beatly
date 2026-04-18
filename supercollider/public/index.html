@@ -307,6 +307,45 @@
     border-color: rgba(255, 46, 136, 0.55);
   }
 
+  .genre-title {
+    all: unset;
+    display: grid;
+    gap: 3px;
+    cursor: pointer;
+    padding: 4px 2px;
+  }
+
+  .variant-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .variant-chip {
+    all: unset;
+    cursor: pointer;
+    font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, Menlo, monospace;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: rgba(255, 255, 255, 0.02);
+    transition: border-color .12s, color .12s, background .12s;
+  }
+
+  .variant-chip:hover {
+    color: var(--fg);
+    border-color: rgba(250, 250, 250, 0.2);
+  }
+
+  .variant-chip.active {
+    background: rgba(255, 46, 136, 0.18);
+    border-color: rgba(255, 46, 136, 0.6);
+    color: var(--fg);
+  }
+
   .actions {
     display: grid;
     gap: 10px;
@@ -561,8 +600,11 @@ function renderMeters(state) {
 function renderState(state) {
   lastState = state;
   document.getElementById('state').textContent = JSON.stringify(state, null, 2);
-  document.getElementById('currentGenre').textContent = niceName(state.profile);
-  document.getElementById('heroProfile').textContent = niceName(state.profile);
+  const genreLabel = niceName(state.genre ?? (state.profile ? state.profile.split('.')[0] : null));
+  const variantLabel = state.variant ?? (state.profile ? state.profile.split('.')[1] : null);
+  const display = variantLabel ? `${genreLabel} · ${variantLabel}` : genreLabel;
+  document.getElementById('currentGenre').textContent = display;
+  document.getElementById('heroProfile').textContent = display;
   document.getElementById('heroBpm').textContent = state.bpm ?? '—';
   document.getElementById('heroPort').textContent = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
   document.getElementById('uiUrl').textContent = uiUrl();
@@ -574,21 +616,48 @@ function renderState(state) {
   document.getElementById('toggleRun').setAttribute('aria-label', running ? 'Pause playback' : 'Start playback');
 
   const wrap = document.getElementById('profiles');
-  if (wrap.childElementCount !== state.profiles.length) {
+  const genres = state.genres ?? [];
+  const expectedCount = genres.length;
+  if (wrap.childElementCount !== expectedCount) {
     wrap.innerHTML = '';
-    for (const id of state.profiles) {
-      const meta = PROFILE_META[id] ?? { label: id, blurb: 'live generative profile' };
-      const b = document.createElement('button');
-      b.className = 'genre-btn';
-      b.dataset.id = id;
-      b.innerHTML = `<span class="title">${meta.label}</span><span class="meta">${meta.blurb}</span>`;
-      b.onclick = () => api('/api/control', { profile: id, running: true }).then((r) => renderState(r.state ?? r));
-      wrap.appendChild(b);
+    for (const genre of genres) {
+      const meta = PROFILE_META[genre.id] ?? { label: genre.id, blurb: 'live generative profile' };
+      const card = document.createElement('div');
+      card.className = 'genre-btn';
+      card.dataset.id = genre.id;
+      const title = document.createElement('button');
+      title.type = 'button';
+      title.className = 'genre-title';
+      title.innerHTML = `<span class="title">${meta.label}</span><span class="meta">${meta.blurb}</span>`;
+      title.onclick = () => api('/api/control', { genre: genre.id, running: true }).then((r) => renderState(r.state ?? r));
+      card.appendChild(title);
+      const chips = document.createElement('div');
+      chips.className = 'variant-row';
+      for (const v of genre.variants) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'variant-chip';
+        chip.dataset.genre = genre.id;
+        chip.dataset.variant = v;
+        chip.textContent = v;
+        chip.onclick = (e) => {
+          e.stopPropagation();
+          api('/api/control', { genre: genre.id, variant: v, running: true }).then((r) => renderState(r.state ?? r));
+        };
+        chips.appendChild(chip);
+      }
+      card.appendChild(chips);
+      wrap.appendChild(card);
     }
   }
 
-  for (const b of wrap.children) {
-    b.classList.toggle('active', b.dataset.id === state.profile);
+  const activeGenre = state.genre ?? (state.profile ? state.profile.split('.')[0] : null);
+  const activeVariant = state.variant ?? (state.profile ? state.profile.split('.')[1] : null);
+  for (const card of wrap.children) {
+    card.classList.toggle('active', card.dataset.id === activeGenre);
+    for (const chip of card.querySelectorAll('.variant-chip')) {
+      chip.classList.toggle('active', card.dataset.id === activeGenre && chip.dataset.variant === activeVariant);
+    }
   }
 
   renderMeters(state);

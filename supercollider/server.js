@@ -10,7 +10,7 @@ import { dirname, join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import osc from 'osc';
 
-import { PROFILES, makeGenerator } from './music.js';
+import { PROFILES, GENRES, makeGenerator, resolveProfileId, splitProfileId, listProfileIds } from './music.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -152,7 +152,7 @@ let nodeId = 1000;
 const allocId = () => ++nodeId;
 
 let state = {
-  profile: 'lofi',
+  profile: resolveProfileId('lofi') ?? 'lofi.classic',
   seed: Math.floor(Math.random() * 1e9),
   generator: null,
   startTime: 0,
@@ -248,8 +248,20 @@ async function readJsonBody(req) {
 
 function applyControl(body) {
   let dirty = false;
-  if (body.profile && PROFILES[body.profile]) {
-    state.profile = body.profile; dirty = true;
+  // Accept either a full "genre.variant" id, a short "genre", or separate
+  // `genre` + `variant` fields. Always normalize to a full "genre.variant".
+  const requestedProfile = body.profile ?? body.genre ?? null;
+  if (requestedProfile) {
+    const resolved = resolveProfileId(requestedProfile, body.variant);
+    if (resolved && PROFILES[resolved]) {
+      state.profile = resolved; dirty = true;
+    }
+  } else if (body.variant && state.profile) {
+    const { genreId } = splitProfileId(state.profile);
+    const resolved = resolveProfileId(genreId, body.variant);
+    if (resolved && PROFILES[resolved]) {
+      state.profile = resolved; dirty = true;
+    }
   }
   if (body.seed !== undefined) {
     state.seed = body.seed >>> 0; dirty = true;
@@ -262,13 +274,21 @@ function applyControl(body) {
     rebuildGenerator(nowSec());
   }
 
+  const { genreId, variantId } = splitProfileId(state.profile);
   return {
     profile: state.profile,
+    genre: genreId,
+    variant: variantId,
     seed: state.seed,
     bpm: state.generator?.profile.bpm ?? null,
     bar: state.nextBarIndex,
     running: state.running,
-    profiles: Object.keys(PROFILES),
+    profiles: listProfileIds(),
+    genres: Object.values(GENRES).map((g) => ({
+      id: g.id,
+      defaultVariant: g.defaultVariant,
+      variants: g.variantIds,
+    })),
     lastAgentEvent: state.lastAgentEvent,
   };
 }

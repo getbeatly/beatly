@@ -57,12 +57,21 @@ if (mode === "update") {
 }
 
 if (mode === "override") {
-  const [genre, running = "true", seed = ""] = args;
-  if (!genre) {
+  const [rawGenre, running = "true", seed = "", explicitVariant = ""] = args;
+  if (!rawGenre) {
     throw new Error("Missing genre");
+  }
+  // Accept either `lofi.night` or `lofi night` / separate variant arg.
+  let genre = rawGenre;
+  let variant = explicitVariant || undefined;
+  if (rawGenre.includes(".")) {
+    const [g, v] = rawGenre.split(".", 2);
+    genre = g;
+    variant = v || variant;
   }
   console.log(JSON.stringify(await skill.override({
     genre,
+    variant,
     running: running !== "false",
     seed: seed === "" ? undefined : Number(seed),
     reason: "pi-skill.override",
