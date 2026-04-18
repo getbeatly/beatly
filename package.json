@@ -51,6 +51,7 @@
     "sc:build": "sclang supercollider/build_synthdefs.scd",
     "sc:live": "sclang supercollider/play_beat.scd",
     "sc:generate": "sclang supercollider/generate.scd",
+    "sc:samples": "node supercollider/render_samples.mjs",
     "event": "npm run build && node dist/cli.js",
     "build:distributions": "node scripts/build-distributions.mjs",
     "build:codex-plugin": "node scripts/build-distributions.mjs --target=codex",
