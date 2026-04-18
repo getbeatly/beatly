@@ -1,4 +1,4 @@
-# Beatly
+# @beatly/core
 
 > A live, generative soundtrack for coding agents. See [beatly.dev](https://beatly.dev).
 
@@ -16,24 +16,27 @@ Then invoke `/skill:beatly`.
 
 ### Codex
 
-```bash
-npm run build:codex-plugin
-```
+Download `beatly-codex-vX.Y.Z.tar.gz` from the [latest release](https://github.com/getbeatly/beatly/releases/latest), extract, and register in a local Codex marketplace:
 
-Load `./.build/distributions/codex/beatly` from a local marketplace, or download `beatly-codex-vX.Y.Z.tar.gz` from the [latest release](https://github.com/getbeatly/beatly/releases).
+```bash
+mkdir -p ~/.codex/plugins
+tar -xzf beatly-codex-*.tar.gz -C ~/.codex/plugins
+```
 
 ### Claude Code
 
-```bash
-npm run build:claude-code
-ln -s "$PWD/.build/distributions/claude-code/beatly" ~/.claude/skills/beatly
-```
+Download `beatly-claude-code-vX.Y.Z.tar.gz` from the [latest release](https://github.com/getbeatly/beatly/releases/latest) and extract into Claude Code's skills directory:
 
-Or download `beatly-claude-code-vX.Y.Z.tar.gz` from the [latest release](https://github.com/getbeatly/beatly/releases).
+```bash
+mkdir -p ~/.claude/skills
+tar -xzf beatly-claude-code-*.tar.gz -C ~/.claude/skills
+```
 
 ## Develop
 
 ```bash
+git clone https://github.com/getbeatly/beatly
+cd beatly && npm install
 npm start                      # run local server + jukebox at http://localhost:8080
 npm run build                  # compile TypeScript
 npm run build:distributions    # build pi, Codex, and Claude Code bundles
