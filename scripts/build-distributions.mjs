@@ -61,9 +61,9 @@ function buildCodexPlugin() {
   mkdirSync(path.join(pluginRoot, ".codex-plugin"), { recursive: true });
   assembleRuntimeBundle({ root: pluginRoot, mode: "root" });
 
-  cpSync(
-    path.join(repoRoot, "codex-plugin", ".codex-plugin", "plugin.json"),
+  writeFileSync(
     path.join(pluginRoot, ".codex-plugin", "plugin.json"),
+    `${JSON.stringify(createCodexPluginManifest(), null, 2)}\n`,
   );
 
   writeFileSync(
@@ -171,6 +171,39 @@ function installRuntimeDependencies(targetRoot) {
     stdio: "inherit",
     env: process.env,
   });
+}
+
+function createCodexPluginManifest() {
+  return {
+    name: "beatly",
+    version: pkg.version,
+    description: "Live soundtrack controls for coding agents. Requires system-wide SuperCollider.",
+    author: {
+      name: "Beatly",
+      url: "https://beatly.dev",
+    },
+    homepage: "https://beatly.dev",
+    repository: "https://github.com/getbeatly/beatly",
+    license: "MIT",
+    keywords: ["beatly", "music", "agents", "supercollider", "codex-plugin"],
+    skills: "./skills/",
+    interface: {
+      displayName: "Beatly",
+      shortDescription: "Live soundtrack controls for coding agents",
+      longDescription:
+        "Control Beatly playback, agent-reactive soundtrack updates, and the local jukebox from Codex. Requires system-wide SuperCollider with scsynth and sclang on PATH.",
+      developerName: "Beatly",
+      category: "Productivity",
+      capabilities: ["Read", "Write"],
+      websiteURL: "https://beatly.dev",
+      brandColor: "#FF2E88",
+      defaultPrompt: [
+        "Start Beatly and play something warm.",
+        "Switch Beatly to a more energetic genre.",
+        "Show me the Beatly state and current playback.",
+      ],
+    },
+  };
 }
 
 function copyDir(from, to) {
