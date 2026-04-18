@@ -10,21 +10,13 @@ Runs 100% locally. Requires SuperCollider installed system-wide (`scsynth` and `
 
 ## Install SuperCollider
 
-Beatly will not start without `scsynth` and `sclang` on `PATH`.
-
-| Platform | Command |
-| --- | --- |
-| macOS (Homebrew) | `brew install --cask supercollider` |
-| Arch / Manjaro | `sudo pacman -S supercollider` |
-| Debian / Ubuntu | `sudo apt install supercollider supercollider-language` |
-| Fedora | `sudo dnf install supercollider` |
-| Windows | [download installer](https://supercollider.github.io/downloads) |
-
-Verify:
-
 ```bash
-scsynth -v && sclang -v
+brew install --cask supercollider   # macOS
+sudo pacman -S supercollider        # Arch
+sudo apt install supercollider      # Debian / Ubuntu
 ```
+
+Windows: [download installer](https://supercollider.github.io/downloads).
 
 ## Install
 
