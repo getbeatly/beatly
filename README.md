@@ -1,84 +1,45 @@
 # @beatly/core
 
-Core library and agent entrypoints for Beatly — live music soundtrack orchestration for coding agents.
+Beatly now acts as a control layer for the SuperCollider setup in `../hello-supercollider`.
 
-## Install
+## What is in this repo now
 
-```bash
-npm i @beatly/core
-```
+- agent-event entrypoint (`@beatly/core/skill`)
+- recommendation/conductor layer (`@beatly/core`)
+- adapter for controlling the sibling `hello-supercollider` server (`@beatly/core/adapters`)
+- genre catalog copied from the sibling project
 
-## Entrypoints
+## What was removed
 
-- `@beatly/core` → engine, session model, signal-to-music decisioning
-- `@beatly/core/skill` → event bridge for coding-agent workflows
-- `@beatly/core/adapters` → adapter contracts and default console adapter
-- `@beatly/core/procedural` → procedural audio sample renderer (PCM/WAV)
+- in-repo DSP/procedural audio code
+- in-repo live audio playground/server
+- old audio specs/docs for the removed renderer
 
-## Architecture (v0.1)
-
-```text
-Agent events/signals
-      │
-      ▼
- BeatlySkill (optional)
-      │
-      ▼
-  BeatlyEngine
-  - session lifecycle
-  - mood/intensity derivation
-  - track selection
-      │
-      ▼
- Adapter layer
-  (audio players, telemetry, websocket relays, etc.)
-```
-
-## Minimal usage
+## Usage
 
 ```ts
-import { BeatlyEngine } from "@beatly/core";
-import { ConsoleAdapter } from "@beatly/core/adapters";
+import { BeatlyConductor } from "@beatly/core";
+import { SuperColliderHelloAdapter } from "@beatly/core/adapters";
 import { createBeatlySkill } from "@beatly/core/skill";
 
-const engine = new BeatlyEngine({ adapters: [new ConsoleAdapter()] });
-const skill = createBeatlySkill(engine);
+const adapter = new SuperColliderHelloAdapter({
+  autostart: true,
+  serverCwd: "../hello-supercollider",
+});
 
-await skill.start({ agentId: "claude-code" });
+await adapter.ensureReady();
+
+const conductor = new BeatlyConductor({ adapters: [adapter] });
+const skill = createBeatlySkill(conductor);
+
+await skill.start({ agentId: "pi" });
 await skill.handleEvent({ type: "task.started" });
 await skill.handleEvent({ type: "task.completed" });
 await skill.stop("done");
 ```
 
-## Interactive procedural audio server (live)
-
-```bash
-npm run dev:audio-server
-```
-
-Then open:
-
-- `http://localhost:8787/` for the interactive control UI
-- `http://localhost:8787/audio` for the live audio stream
-- `http://localhost:8787/state` for current soundscape state
-
-Send commands from an agent or script:
-
-```bash
-curl -X POST http://localhost:8787/command \
-  -H 'content-type: application/json' \
-  -d '{"mood":"deep-focus","intensity":0.68,"space":0.5,"transitionMs":900}'
-```
-
-Or send high-level agent events:
-
-```bash
-curl -X POST http://localhost:8787/agent \
-  -H 'content-type: application/json' \
-  -d '{"event":"task.completed"}'
-```
-
 ## Notes
 
-- This is a foundation release focused on API shape and extension points.
-- Next layers can add real audio providers, adaptive recommendation models, and multi-agent mixing.
+- `SuperColliderHelloAdapter` talks to the HTTP API exposed by `../hello-supercollider/server.js`.
+- If `autostart: true`, this package can spawn that server for you.
+- Supported genres copied over: `ambient`, `calming`, `deepFocus`, `lofi`, `jazzNoir`, `techno`, `dnb`, `dub`, `uplift`, `neoSoul`.

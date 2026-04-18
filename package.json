@@ -1,7 +1,7 @@
 {
   "name": "@beatly/core",
   "version": "0.0.1",
-  "description": "Core library and agent entrypoints for Beatly.",
+  "description": "Beatly control layer for a sibling SuperCollider runtime.",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -25,11 +25,10 @@
       "types": "./dist/adapters.d.ts",
       "import": "./dist/adapters.js"
     },
-    "./procedural": {
-      "types": "./dist/procedural/index.d.ts",
-      "import": "./dist/procedural/index.js"
-    },
     "./package.json": "./package.json"
+  },
+  "bin": {
+    "beatly-event": "./dist/cli.js"
   },
   "files": [
     "dist",
@@ -40,18 +39,18 @@
     "clean": "rm -rf dist",
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev:audio-server": "npm run build && node playground/procedural-server.mjs",
-    "dev:audio-samples": "npm run build && node playground/audio-tests/render-sample.mjs",
-    "dev:audio-tour": "npm run build && node playground/audio-tests/tour.mjs",
+    "event": "npm run build && node dist/cli.js",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
     "beatly",
     "ai",
     "agents",
-    "music"
+    "music",
+    "supercollider"
   ],
   "devDependencies": {
+    "@types/node": "^22.15.3",
     "typescript": "^5.8.0"
   }
 }

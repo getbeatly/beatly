@@ -1,19 +1,11 @@
-import type {
-  BeatlyAdapter,
-  BeatlyAdapterPlaybackState,
-  BeatlyAdapterSessionContext,
-  BeatlyMood,
-  BeatlyTrack,
-} from "./adapters.js";
+import { BEATLY_GENRES, DEFAULT_GENRE, type BeatlyGenre, type BeatlyGenreId } from "./genres.js";
 
-export type { BeatlyAdapter, BeatlyMood, BeatlyTrack } from "./adapters.js";
+export { BEATLY_GENRES, DEFAULT_GENRE, getGenre, type BeatlyGenre, type BeatlyGenreId } from "./genres.js";
+export { ConsoleDirectiveAdapter, SuperColliderHelloAdapter, type SuperColliderHelloAdapterOptions, type SuperColliderServerState } from "./adapters.js";
 
-export interface BeatlySignal {
-  /** 0..1 */
+export interface BeatlyAgentSignal {
   readonly focus: number;
-  /** 0..1 */
   readonly cognitiveLoad: number;
-  /** 0..1 */
   readonly energy: number;
   readonly timestamp?: Date;
 }
@@ -22,181 +14,212 @@ export interface BeatlySession {
   readonly sessionId: string;
   readonly agentId: string;
   readonly startedAt: Date;
-  readonly mood: BeatlyMood;
+  readonly genre: BeatlyGenreId;
   readonly intensity: number;
-  readonly track: BeatlyTrack | null;
+  readonly seed: number;
+  readonly running: boolean;
 }
 
-export interface BeatlyDecision {
-  readonly mood: BeatlyMood;
+export interface BeatlyPlaybackDirective {
+  readonly genre: BeatlyGenreId;
   readonly intensity: number;
-  readonly track: BeatlyTrack | null;
+  readonly seed: number;
+  readonly running: boolean;
+  readonly reason: string;
+  readonly summary: string;
+  readonly timestamp: Date;
 }
 
-export interface BeatlyEngineOptions {
-  readonly adapters?: readonly BeatlyAdapter[];
-  readonly catalog?: readonly BeatlyTrack[];
+export interface BeatlyDirectiveAdapter {
+  readonly id: string;
+  applyDirective(directive: BeatlyPlaybackDirective): Promise<unknown> | unknown;
+}
+
+export interface BeatlyConductorOptions {
+  readonly adapters?: readonly BeatlyDirectiveAdapter[];
+  readonly seedFactory?: () => number;
 }
 
 export interface StartSessionOptions {
   readonly agentId: string;
   readonly sessionId?: string;
-  readonly initialMood?: BeatlyMood;
+  readonly initialGenre?: BeatlyGenreId;
   readonly initialIntensity?: number;
+  readonly running?: boolean;
 }
 
-const DEFAULT_CATALOG: readonly BeatlyTrack[] = [
-  { id: "deep-001", title: "Focused Loops", bpm: 88, energy: 0.35, moods: ["deep-focus", "calming"] },
-  { id: "flow-001", title: "Terminal Drift", bpm: 104, energy: 0.6, moods: ["flow", "neutral"] },
-  { id: "uplift-001", title: "Ship It Sunrise", bpm: 124, energy: 0.82, moods: ["uplift", "flow"] },
-];
+export interface BeatlyRecommendation {
+  readonly genre: BeatlyGenre;
+  readonly intensity: number;
+  readonly summary: string;
+}
 
-export class BeatlyEngine {
-  private readonly adapters = new Set<BeatlyAdapter>();
-  private readonly catalog: readonly BeatlyTrack[];
-
+export class BeatlyConductor {
+  private readonly adapters = new Set<BeatlyDirectiveAdapter>();
+  private readonly seedFactory: () => number;
   private session: BeatlySession | null = null;
 
-  constructor(options: BeatlyEngineOptions = {}) {
-    this.catalog = options.catalog ?? DEFAULT_CATALOG;
+  constructor(options: BeatlyConductorOptions = {}) {
     for (const adapter of options.adapters ?? []) {
       this.adapters.add(adapter);
     }
+
+    this.seedFactory = options.seedFactory ?? (() => Math.floor(Math.random() * 1_000_000_000));
+  }
+
+  public registerAdapter(adapter: BeatlyDirectiveAdapter): void {
+    this.adapters.add(adapter);
   }
 
   public getSession(): BeatlySession | null {
     return this.session;
   }
 
-  public registerAdapter(adapter: BeatlyAdapter): void {
-    this.adapters.add(adapter);
-  }
-
   public async startSession(options: StartSessionOptions): Promise<BeatlySession> {
     if (this.session !== null) {
-      throw new Error("Beatly session already active. Stop current session before starting a new one.");
+      throw new Error("Beatly session already active.");
     }
-
-    const mood = options.initialMood ?? "neutral";
-    const intensity = clamp01(options.initialIntensity ?? 0.5);
-    const track = this.selectTrack(mood, intensity);
 
     const session: BeatlySession = {
       sessionId: options.sessionId ?? generateSessionId(),
       agentId: options.agentId,
       startedAt: new Date(),
-      mood,
-      intensity,
-      track,
+      genre: options.initialGenre ?? DEFAULT_GENRE,
+      intensity: clamp01(options.initialIntensity ?? 0.5),
+      seed: this.seedFactory(),
+      running: options.running ?? true,
     };
 
     this.session = session;
 
-    const context = toContext(session);
-    const state = toPlaybackState(session);
+    await this.dispatch({
+      genre: session.genre,
+      intensity: session.intensity,
+      seed: session.seed,
+      running: session.running,
+      reason: "session.started",
+      summary: `Start ${session.genre} at intensity ${session.intensity.toFixed(2)}`,
+      timestamp: new Date(),
+    });
 
-    await this.forEachAdapter((adapter) => adapter.onSessionStart?.(context, state));
     return session;
   }
 
-  public async ingestSignal(signal: BeatlySignal): Promise<BeatlyDecision> {
+  public async updateFromSignal(signal: BeatlyAgentSignal, reason = "signal.update"): Promise<BeatlyPlaybackDirective> {
     if (this.session === null) {
-      throw new Error("No active Beatly session. Call startSession() first.");
+      throw new Error("No active Beatly session.");
     }
 
-    const mood = deriveMood(signal);
-    const intensity = deriveIntensity(signal);
-    const track = this.selectTrack(mood, intensity);
+    const recommendation = recommendPlayback(signal);
+    const nextDirective: BeatlyPlaybackDirective = {
+      genre: recommendation.genre.id,
+      intensity: recommendation.intensity,
+      seed: this.session.seed,
+      running: true,
+      reason,
+      summary: recommendation.summary,
+      timestamp: signal.timestamp ?? new Date(),
+    };
 
     this.session = {
       ...this.session,
-      mood,
-      intensity,
-      track,
+      genre: nextDirective.genre,
+      intensity: nextDirective.intensity,
+      running: nextDirective.running,
     };
 
-    const context = toContext(this.session);
-    const state = toPlaybackState(this.session);
-
-    await this.forEachAdapter((adapter) => adapter.onPlaybackUpdate?.(context, state));
-
-    return { mood, intensity, track };
+    await this.dispatch(nextDirective);
+    return nextDirective;
   }
 
-  public async stopSession(reason = "manual"): Promise<void> {
+  public async stopSession(reason = "session.stopped"): Promise<void> {
     if (this.session === null) {
       return;
     }
 
-    const session = this.session;
+    const directive: BeatlyPlaybackDirective = {
+      genre: this.session.genre,
+      intensity: this.session.intensity,
+      seed: this.session.seed,
+      running: false,
+      reason,
+      summary: "Stop playback",
+      timestamp: new Date(),
+    };
+
     this.session = null;
-
-    await this.forEachAdapter((adapter) => adapter.onSessionStop?.(toContext(session), reason));
+    await this.dispatch(directive);
   }
 
-  private selectTrack(mood: BeatlyMood, intensity: number): BeatlyTrack | null {
-    const targetBpm = 70 + Math.round(intensity * 70);
-    const candidatePool = this.catalog.filter((track) => track.moods.includes(mood));
-    const pool = candidatePool.length > 0 ? candidatePool : this.catalog;
-
-    if (pool.length === 0) {
-      return null;
-    }
-
-    return [...pool].sort((a, b) => Math.abs(a.bpm - targetBpm) - Math.abs(b.bpm - targetBpm))[0] ?? null;
-  }
-
-  private async forEachAdapter(fn: (adapter: BeatlyAdapter) => Promise<void> | void): Promise<void> {
+  private async dispatch(directive: BeatlyPlaybackDirective): Promise<void> {
     for (const adapter of this.adapters) {
-      await fn(adapter);
+      await adapter.applyDirective(directive);
     }
   }
 }
 
-function toContext(session: BeatlySession): BeatlyAdapterSessionContext {
+export function recommendPlayback(signal: BeatlyAgentSignal): BeatlyRecommendation {
+  const intensity = deriveIntensity(signal);
+  const genre = deriveGenre(signal, intensity);
+
   return {
-    sessionId: session.sessionId,
-    agentId: session.agentId,
-    startedAt: session.startedAt,
+    genre,
+    intensity,
+    summary: describeRecommendation(genre.id, intensity, signal),
   };
 }
 
-function toPlaybackState(session: BeatlySession): BeatlyAdapterPlaybackState {
-  return {
-    mood: session.mood,
-    intensity: session.intensity,
-    track: session.track,
-  };
+function deriveGenre(signal: BeatlyAgentSignal, intensity: number): BeatlyGenre {
+  if (signal.cognitiveLoad > 0.85) {
+    return genreById("calming");
+  }
+
+  if (signal.focus > 0.8 && intensity < 0.55) {
+    return genreById("deepFocus");
+  }
+
+  if (signal.focus > 0.75 && intensity < 0.72) {
+    return genreById("lofi");
+  }
+
+  if (signal.energy > 0.85 && signal.focus > 0.7) {
+    return genreById("techno");
+  }
+
+  if (signal.energy > 0.8) {
+    return genreById("uplift");
+  }
+
+  if (signal.energy < 0.25 && signal.focus < 0.4) {
+    return genreById("ambient");
+  }
+
+  if (signal.energy < 0.4) {
+    return genreById("dub");
+  }
+
+  return genreById(DEFAULT_GENRE);
 }
 
-function deriveMood(signal: BeatlySignal): BeatlyMood {
-  if (signal.cognitiveLoad > 0.8) {
-    return "calming";
-  }
-
-  if (signal.focus > 0.75 && signal.energy >= 0.5) {
-    return "flow";
-  }
-
-  if (signal.focus > 0.75) {
-    return "deep-focus";
-  }
-
-  if (signal.energy < 0.35) {
-    return "uplift";
-  }
-
-  return "neutral";
+function deriveIntensity(signal: BeatlyAgentSignal): number {
+  return clamp01(signal.energy * 0.5 + signal.focus * 0.35 + (1 - signal.cognitiveLoad) * 0.15);
 }
 
-function deriveIntensity(signal: BeatlySignal): number {
-  const base = signal.energy * 0.5 + signal.focus * 0.35 + (1 - signal.cognitiveLoad) * 0.15;
-  return clamp01(base);
+function describeRecommendation(genre: BeatlyGenreId, intensity: number, signal: BeatlyAgentSignal): string {
+  return `${genre} @ ${intensity.toFixed(2)} (focus=${signal.focus.toFixed(2)}, load=${signal.cognitiveLoad.toFixed(2)}, energy=${signal.energy.toFixed(2)})`;
+}
+
+function genreById(id: BeatlyGenreId): BeatlyGenre {
+  const genre = BEATLY_GENRES.find((entry) => entry.id === id);
+  if (genre === undefined) {
+    throw new Error(`Unknown Beatly genre: ${id}`);
+  }
+
+  return genre;
 }
 
 function generateSessionId(): string {
-  const randomPart = Math.random().toString(36).slice(2, 10);
-  return `beatly_${Date.now().toString(36)}_${randomPart}`;
+  return `beatly_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function clamp01(value: number): number {
@@ -207,4 +230,4 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-export const BEATLY_CORE_VERSION = "0.1.0" as const;
+export const BEATLY_CORE_VERSION = "0.2.0" as const;
