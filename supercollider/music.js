@@ -21,6 +21,11 @@ export function makeRng(seed) {
 }
 
 // ---------- music theory ----------
+// Only modes that produce consonant tertian chords via chordTones(). Exotic
+// scales (wholeTone, doubleHarmonic, blues, harmonicMinor, pure pentatonic
+// minor) were removed because stacking thirds on them yields broken or
+// dissonant voicings. Pentatonic scales are kept but callers must use the
+// 'triad' chord extension (quartal/no-dissonance) — see notes below.
 const SCALES = {
   ionian:           [0,2,4,5,7,9,11],
   dorian:           [0,2,3,5,7,9,10],
@@ -28,14 +33,8 @@ const SCALES = {
   lydian:           [0,2,4,6,7,9,11],
   mixolydian:       [0,2,4,5,7,9,10],
   aeolian:          [0,2,3,5,7,8,10],
-  pentMinor:        [0,3,5,7,10],
-  majorPentatonic:  [0,2,4,7,9],
-  minorPentatonic:  [0,3,5,7,10],
-  harmonicMinor:    [0,2,3,5,7,8,11],
   melodicMinor:     [0,2,3,5,7,9,11],
-  doubleHarmonic:   [0,1,4,5,7,8,11],
-  wholeTone:        [0,2,4,6,8,10],
-  blues:            [0,3,5,6,7,10],
+  majorPentatonic:  [0,2,4,7,9],
 };
 
 const midiToHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
@@ -374,9 +373,10 @@ const BASES = {
   },
 
   rainyPiano: {
+    // Pentatonic + triad → quartal/open voicings, zero dissonance.
     tonic: 65, scale: 'majorPentatonic', bpm: 68,
     progressions: [[1,3,6,4],[1,5,6,3],[1,2,6,5]],
-    chordExt: 'ninth', barsPerChord: 4,
+    chordExt: 'triad', barsPerChord: 4,
     bassStyle: 'none',
     leadDensity: 0.1,
     shimmerRate: 2,
@@ -422,7 +422,7 @@ const VARIANTS = {
     warmth:    { chordExt: 'ninth', pad: { warmth: 0.95, amp: 0.08 } },
     rain:      { shimmerRate: 6, delay: { beats: 0.5, fb: 0.55, mix: 0.5 } },
     cloudland: { bpm: 58, barsPerChord: 8 },
-    hymn:      { scale: 'majorPentatonic', tonic: 67, chordExt: 'seventh' },
+    hymn:      { scale: 'majorPentatonic', tonic: 67, chordExt: 'triad' },
     mist:      { tonic: 62, scale: 'dorian', pad: { warmth: 0.82 } },
   },
 
@@ -445,7 +445,7 @@ const VARIANTS = {
     classic: {},
     night:   { tonic: 53, bpm: 72, pad: { warmth: 0.85 } },
     crate:   { swing: 0.22, pad: { warmth: 0.8 }, reverb: { damp: 0.6 } },
-    sunday:  { scale: 'majorPentatonic', tonic: 60, chordExt: 'ninth' },
+    sunday:  { scale: 'majorPentatonic', tonic: 60, chordExt: 'triad' },
     jazzy:   { chordExt: 'ninth', swing: 0.2, scale: 'dorian' },
     tape:    { bpm: 74, pad: { warmth: 0.88 }, delay: { fb: 0.55, mix: 0.5 } },
   },
@@ -455,7 +455,7 @@ const VARIANTS = {
     ballad:   { bpm: 72, chordExt: 'ninth', leadDensity: 0.35 },
     uptempo:  { bpm: 132, leadDensity: 0.6 },
     rhodes:   { pad: { warmth: 0.88 }, chordExt: 'eleventh' },
-    blue:     { scale: 'blues', chordExt: 'seventh' },
+    blue:     { scale: 'aeolian', chordExt: 'seventh', tonic: 48 },
     afterhours: { tonic: 46, bpm: 84, pad: { warmth: 0.82 } },
   },
 
@@ -510,7 +510,7 @@ const VARIANTS = {
     classic:   {},
     euphoric:  { bpm: 128, chordExt: 'ninth', leadDensity: 0.6 },
     anthem:    { leadDensity: 0.7, pad: { warmth: 0.7 } },
-    gospel:    { scale: 'majorPentatonic', chordExt: 'seventh' },
+    gospel:    { scale: 'majorPentatonic', chordExt: 'triad' },
     dawn:      { bpm: 108, pad: { warmth: 0.75 } },
     stadium:   { bpm: 126, chordExt: 'seventh', reverb: { mix: 0.8 } },
   },
@@ -539,7 +539,7 @@ const VARIANTS = {
     buttery:  { bpm: 80, chordExt: 'thirteenth', pad: { warmth: 0.88 } },
     jazzy:    { chordExt: 'ninth', scale: 'dorian' },
     midnight: { tonic: 53, pad: { warmth: 0.8 } },
-    sunday:   { scale: 'majorPentatonic', tonic: 60, bpm: 86 },
+    sunday:   { scale: 'majorPentatonic', tonic: 60, bpm: 86, chordExt: 'triad' },
   },
 
   cityPop: {
@@ -563,7 +563,7 @@ const VARIANTS = {
   chillHouse: {
     classic: {},
     deep:    { tonic: 53, scale: 'dorian', chordExt: 'ninth', pad: { warmth: 0.8 } },
-    beach:   { scale: 'majorPentatonic', tonic: 62, pad: { warmth: 0.85 } },
+    beach:   { scale: 'majorPentatonic', tonic: 62, chordExt: 'triad', pad: { warmth: 0.85 } },
     sunset:  { bpm: 110 },
     rooftop: { bpm: 124, leadDensity: 0.4 },
     balearic:{ bpm: 114, chordExt: 'ninth', pad: { warmth: 0.82 } },
@@ -571,8 +571,9 @@ const VARIANTS = {
 
   rainyPiano: {
     classic:  {},
-    midnight: { tonic: 58, scale: 'aeolian', pad: { warmth: 0.82 } },
-    morning:  { tonic: 67, scale: 'lydian' },
+    // These variants leave pentatonic land, so they get richer extensions back.
+    midnight: { tonic: 58, scale: 'aeolian', chordExt: 'ninth', pad: { warmth: 0.82 } },
+    morning:  { tonic: 67, scale: 'lydian', chordExt: 'ninth' },
     moss:     { bpm: 56 },
     stormy:   { shimmerRate: 5, reverb: { mix: 1.5 } },
     hymn:     { scale: 'ionian', chordExt: 'seventh' },
@@ -580,7 +581,7 @@ const VARIANTS = {
 
   sunsetGroove: {
     classic:    {},
-    beach:      { tonic: 58, scale: 'majorPentatonic', pad: { warmth: 0.85 } },
+    beach:      { tonic: 58, scale: 'majorPentatonic', chordExt: 'triad', pad: { warmth: 0.85 } },
     dusk:       { bpm: 90, pad: { warmth: 0.82 } },
     golden:     { bpm: 108, chordExt: 'thirteenth' },
     saltwater:  { bpm: 94, scale: 'dorian' },
