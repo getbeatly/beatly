@@ -16,7 +16,14 @@ export type BeatlyGenreId =
   | "dnb"
   | "dub"
   | "uplift"
-  | "neoSoul";
+  | "neoSoul"
+  | "dreamPop"
+  | "soulHop"
+  | "cityPop"
+  | "bossaNova"
+  | "chillHouse"
+  | "rainyPiano"
+  | "sunsetGroove";
 
 export const BEATLY_GENRES: readonly BeatlyGenre[] = [
   {
@@ -88,6 +95,55 @@ export const BEATLY_GENRES: readonly BeatlyGenre[] = [
     bpm: 84,
     tags: ["groove", "warm", "syncopated"],
     description: "Warm chords and syncopated rhythm with more personality.",
+  },
+  {
+    id: "dreamPop",
+    label: "Dream Pop",
+    bpm: 72,
+    tags: ["lush", "sweet", "floating"],
+    description: "Lush suspended harmony and soft pulse for pretty, floating focus.",
+  },
+  {
+    id: "soulHop",
+    label: "Soul Hop",
+    bpm: 88,
+    tags: ["soulful", "swing", "warm"],
+    description: "Dusty drums and sweet extended chords with mellow pocket.",
+  },
+  {
+    id: "cityPop",
+    label: "City Pop",
+    bpm: 110,
+    tags: ["bright", "glossy", "jazzy"],
+    description: "Glossy upbeat chords with smooth bass movement and pop shine.",
+  },
+  {
+    id: "bossaNova",
+    label: "Bossa Nova",
+    bpm: 94,
+    tags: ["gentle", "syncopated", "breezy"],
+    description: "Gentle Brazilian-inspired pulse with light syncopation and color.",
+  },
+  {
+    id: "chillHouse",
+    label: "Chill House",
+    bpm: 118,
+    tags: ["steady", "soft-club", "euphoric"],
+    description: "Soft four-on-the-floor with glossy chords and easy momentum.",
+  },
+  {
+    id: "rainyPiano",
+    label: "Rainy Piano",
+    bpm: 68,
+    tags: ["piano-ish", "tender", "minimal"],
+    description: "Tender, sparse harmony with very low rhythmic pressure.",
+  },
+  {
+    id: "sunsetGroove",
+    label: "Sunset Groove",
+    bpm: 102,
+    tags: ["warm", "optimistic", "golden-hour"],
+    description: "Warm bass, bright chords, and easy-going forward motion.",
   },
 ] as const;
 

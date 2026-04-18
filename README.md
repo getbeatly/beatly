@@ -34,6 +34,8 @@ const skill = createBeatlySkill(conductor);
 
 await skill.start({ agentId: "pi" });
 await skill.handleEvent({ type: "task.started" });
+await skill.handleUpdate({ type: "agent.update", status: "coding", summary: "Implementing feature" });
+await skill.override({ genre: "lofi", reason: "manual.focus-mode" });
 await skill.handleEvent({ type: "task.completed" });
 await skill.stop("done");
 ```
@@ -48,10 +50,27 @@ npm run sc:live
 npm run sc:generate
 ```
 
+## Agent skill shape
+
+The skill now supports:
+
+- `handleEvent(...)` for discrete lifecycle events
+- `handleUpdate(...)` for richer status updates from an agent
+- `override(...)` for direct playback changes
+
+Example update payloads:
+
+```ts
+{ type: "agent.update", status: "thinking", summary: "Planning the refactor" }
+{ type: "agent.update", status: "coding", signal: { energy: 0.72 } }
+{ type: "playback.override", playback: { genre: "ambient", running: true } }
+```
+
 ## Notes
 
 - `npm start` runs the main server, which spawns `scsynth`, serves the playground UI, and accepts control + agent-event HTTP commands.
 - `SuperColliderHelloAdapter` talks to the HTTP API exposed by `supercollider/server.js`.
 - Agent/event endpoints: `POST /api/agent` and `POST /api/event`.
 - Playground/control endpoints: `POST /api/control` and `POST /api/command`.
-- Supported genres copied over: `ambient`, `calming`, `deepFocus`, `lofi`, `jazzNoir`, `techno`, `dnb`, `dub`, `uplift`, `neoSoul`.
+- Supported genres: `ambient`, `calming`, `deepFocus`, `lofi`, `jazzNoir`, `techno`, `dnb`, `dub`, `uplift`, `neoSoul`, `dreamPop`, `soulHop`, `cityPop`, `bossaNova`, `chillHouse`, `rainyPiano`, `sunsetGroove`.
+- Expanded scale palette in the runtime includes `majorPentatonic`, `minorPentatonic`, `harmonicMinor`, `melodicMinor`, `doubleHarmonic`, and `wholeTone`, plus support for `thirteenth` chord extensions.

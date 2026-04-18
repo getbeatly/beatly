@@ -30,6 +30,16 @@ export interface BeatlyPlaybackDirective {
   readonly timestamp: Date;
 }
 
+export interface BeatlyPlaybackOverride {
+  readonly genre?: BeatlyGenreId;
+  readonly intensity?: number;
+  readonly seed?: number;
+  readonly running?: boolean;
+  readonly reason?: string;
+  readonly summary?: string;
+  readonly timestamp?: Date;
+}
+
 export interface BeatlyDirectiveAdapter {
   readonly id: string;
   applyDirective(directive: BeatlyPlaybackDirective): Promise<unknown> | unknown;
@@ -132,6 +142,33 @@ export class BeatlyConductor {
     return nextDirective;
   }
 
+  public async applyPlaybackOverride(override: BeatlyPlaybackOverride): Promise<BeatlyPlaybackDirective> {
+    if (this.session === null) {
+      throw new Error("No active Beatly session.");
+    }
+
+    const directive: BeatlyPlaybackDirective = {
+      genre: override.genre ?? this.session.genre,
+      intensity: clamp01(override.intensity ?? this.session.intensity),
+      seed: override.seed ?? this.session.seed,
+      running: override.running ?? this.session.running,
+      reason: override.reason ?? "playback.override",
+      summary: override.summary ?? "Manual playback override",
+      timestamp: override.timestamp ?? new Date(),
+    };
+
+    this.session = {
+      ...this.session,
+      genre: directive.genre,
+      intensity: directive.intensity,
+      seed: directive.seed,
+      running: directive.running,
+    };
+
+    await this.dispatch(directive);
+    return directive;
+  }
+
   public async stopSession(reason = "session.stopped"): Promise<void> {
     if (this.session === null) {
       return;
@@ -174,24 +211,48 @@ function deriveGenre(signal: BeatlyAgentSignal, intensity: number): BeatlyGenre 
     return genreById("calming");
   }
 
-  if (signal.focus > 0.8 && intensity < 0.55) {
+  if (signal.energy < 0.18 && signal.focus < 0.45) {
+    return genreById("ambient");
+  }
+
+  if (signal.energy < 0.3 && signal.focus > 0.55) {
+    return genreById("rainyPiano");
+  }
+
+  if (signal.focus > 0.82 && intensity < 0.5) {
     return genreById("deepFocus");
+  }
+
+  if (signal.focus > 0.72 && signal.energy < 0.5 && signal.cognitiveLoad < 0.6) {
+    return genreById("dreamPop");
   }
 
   if (signal.focus > 0.75 && intensity < 0.72) {
     return genreById("lofi");
   }
 
-  if (signal.energy > 0.85 && signal.focus > 0.7) {
+  if (signal.focus > 0.58 && signal.energy >= 0.45 && signal.energy < 0.72 && signal.cognitiveLoad < 0.55) {
+    return genreById("soulHop");
+  }
+
+  if (signal.energy > 0.88 && signal.focus > 0.78) {
     return genreById("techno");
+  }
+
+  if (signal.energy > 0.8 && signal.focus > 0.62) {
+    return genreById("chillHouse");
+  }
+
+  if (signal.energy > 0.76 && signal.cognitiveLoad < 0.45) {
+    return genreById("cityPop");
+  }
+
+  if (signal.energy > 0.68 && signal.focus > 0.48) {
+    return genreById("sunsetGroove");
   }
 
   if (signal.energy > 0.8) {
     return genreById("uplift");
-  }
-
-  if (signal.energy < 0.25 && signal.focus < 0.4) {
-    return genreById("ambient");
   }
 
   if (signal.energy < 0.4) {

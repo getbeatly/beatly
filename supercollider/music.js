@@ -22,14 +22,20 @@ export function makeRng(seed) {
 
 // ---------- music theory ----------
 const SCALES = {
-  ionian:     [0,2,4,5,7,9,11],
-  dorian:     [0,2,3,5,7,9,10],
-  phrygian:   [0,1,3,5,7,8,10],
-  lydian:     [0,2,4,6,7,9,11],
-  mixolydian: [0,2,4,5,7,9,10],
-  aeolian:    [0,2,3,5,7,8,10],
-  pentMinor:  [0,3,5,7,10],
-  blues:      [0,3,5,6,7,10],
+  ionian:           [0,2,4,5,7,9,11],
+  dorian:           [0,2,3,5,7,9,10],
+  phrygian:         [0,1,3,5,7,8,10],
+  lydian:           [0,2,4,6,7,9,11],
+  mixolydian:       [0,2,4,5,7,9,10],
+  aeolian:          [0,2,3,5,7,8,10],
+  pentMinor:        [0,3,5,7,10],
+  majorPentatonic:  [0,2,4,7,9],
+  minorPentatonic:  [0,3,5,7,10],
+  harmonicMinor:    [0,2,3,5,7,8,11],
+  melodicMinor:     [0,2,3,5,7,9,11],
+  doubleHarmonic:   [0,1,4,5,7,8,11],
+  wholeTone:        [0,2,4,6,8,10],
+  blues:            [0,3,5,6,7,10],
 };
 
 const midiToHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
@@ -43,10 +49,11 @@ function degreeToMidi(tonic, scale, deg, octaveOffset = 0) {
 }
 
 function chordTones(tonic, scale, deg, ext = 'triad') {
-  const offsets = ext === 'eleventh' ? [0, 2, 4, 6, 8, 10]
-                : ext === 'ninth'    ? [0, 2, 4, 6, 8]
-                : ext === 'seventh'  ? [0, 2, 4, 6]
-                :                      [0, 2, 4];
+  const offsets = ext === 'thirteenth' ? [0, 2, 4, 6, 8, 10, 12]
+                : ext === 'eleventh'   ? [0, 2, 4, 6, 8, 10]
+                : ext === 'ninth'      ? [0, 2, 4, 6, 8]
+                : ext === 'seventh'    ? [0, 2, 4, 6]
+                :                        [0, 2, 4];
   return offsets.map((d) => degreeToMidi(tonic, scale, deg + d));
 }
 
@@ -242,6 +249,127 @@ export const PROFILES = {
     pad: { warmth: 0.78, sub: 0.6, amp: 0.07 },
     reverb: { room: 0.78, damp: 0.45, mix: 0.7 },
     delay:  { beats: 0.5, fb: 0.4, mix: 0.4 },
+  },
+
+  dreamPop: {
+    tonic: 62, scale: 'lydian', bpm: 72,
+    progressions: [[1,5,6,4],[1,3,4,4],[6,4,1,5]],
+    chordExt: 'ninth', barsPerChord: 4,
+    drumPattern: {
+      kick:  [1,0,0,0, 0,0,0,0, 0.8,0,0,0, 0,0,0,0],
+      snare: [0,0,0,0, 0.7,0,0,0, 0,0,0,0, 0.7,0,0,0],
+      hat:   [0.35,0,0.2,0, 0.3,0,0.2,0, 0.35,0,0.2,0, 0.3,0,0.2,0],
+    },
+    bassStyle: 'rootSparse',
+    leadDensity: 0.18,
+    shimmerRate: 3,
+    swing: 0.08,
+    pad: { warmth: 0.92, sub: 0.75, amp: 0.075 },
+    reverb: { room: 0.94, damp: 0.25, mix: 1.2 },
+    delay:  { beats: 0.75, fb: 0.52, mix: 0.48 },
+  },
+
+  soulHop: {
+    tonic: 58, scale: 'mixolydian', bpm: 88,
+    progressions: [[1,4,2,5],[1,6,2,5],[4,5,1,6]],
+    chordExt: 'eleventh', barsPerChord: 2,
+    drumPattern: {
+      kick:  [1,0,0,0.3, 0,0,0.6,0, 0.8,0,0,0, 0,0.4,0,0],
+      snare: [0,0,0,0, 0.95,0,0,0, 0,0,0,0, 0.85,0,0,0.35],
+      hat:   [0.55,0.25,0.65,0.25, 0.55,0.2,0.65,0.35, 0.55,0.25,0.65,0.25, 0.55,0.2,0.65,0.3],
+    },
+    bassStyle: 'rootGroove',
+    leadDensity: 0.32,
+    shimmerRate: 1,
+    swing: 0.18,
+    pad: { warmth: 0.8, sub: 0.62, amp: 0.068 },
+    reverb: { room: 0.8, damp: 0.42, mix: 0.72 },
+    delay:  { beats: 0.5, fb: 0.36, mix: 0.34 },
+  },
+
+  cityPop: {
+    tonic: 61, scale: 'lydian', bpm: 110,
+    progressions: [[1,5,6,3],[4,5,3,6],[1,3,4,5]],
+    chordExt: 'thirteenth', barsPerChord: 2,
+    drumPattern: {
+      kick:  [1,0,0,0, 0.8,0,0,0, 1,0,0,0, 0.75,0,0,0],
+      clap:  [0,0,0,0, 0.85,0,0,0, 0,0,0,0, 0.85,0,0,0],
+      hat:   [0.6,0,0.45,0.15, 0.6,0,0.45,0.25, 0.6,0,0.45,0.15, 0.6,0,0.45,0.3],
+    },
+    bassStyle: 'driving',
+    leadDensity: 0.42,
+    shimmerRate: 2,
+    swing: 0.04,
+    pad: { warmth: 0.82, sub: 0.52, amp: 0.064 },
+    reverb: { room: 0.74, damp: 0.38, mix: 0.62 },
+    delay:  { beats: 0.375, fb: 0.34, mix: 0.34 },
+  },
+
+  bossaNova: {
+    tonic: 60, scale: 'melodicMinor', bpm: 94,
+    progressions: [[1,6,2,5],[1,3,6,2],[4,5,3,6]],
+    chordExt: 'ninth', barsPerChord: 2,
+    drumPattern: {
+      kick:  [1,0,0,0, 0,0,0.55,0, 0.8,0,0,0, 0,0,0.55,0],
+      rim:   [0,0,0.45,0, 0,0.7,0,0, 0,0,0.45,0, 0,0.7,0,0],
+      hat:   [0.42,0.18,0.38,0.18, 0.42,0.18,0.38,0.18, 0.42,0.18,0.38,0.18, 0.42,0.18,0.38,0.18],
+    },
+    bassStyle: 'rootGroove',
+    leadDensity: 0.24,
+    shimmerRate: 1,
+    swing: 0.1,
+    pad: { warmth: 0.74, sub: 0.46, amp: 0.06 },
+    reverb: { room: 0.72, damp: 0.42, mix: 0.56 },
+    delay:  { beats: 0.25, fb: 0.28, mix: 0.22 },
+  },
+
+  chillHouse: {
+    tonic: 58, scale: 'ionian', bpm: 118,
+    progressions: [[1,5,6,4],[1,6,4,5],[6,4,1,5]],
+    chordExt: 'ninth', barsPerChord: 2,
+    drumPattern: {
+      kick:  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+      clap:  [0,0,0,0, 0.9,0,0,0, 0,0,0,0, 0.9,0,0,0],
+      hat:   [0,0.18,0.62,0.18, 0,0.18,0.62,0.18, 0,0.18,0.62,0.18, 0,0.18,0.62,0.3],
+    },
+    bassStyle: 'driving',
+    leadDensity: 0.3,
+    shimmerRate: 2,
+    swing: 0,
+    pad: { warmth: 0.72, sub: 0.5, amp: 0.06 },
+    reverb: { room: 0.76, damp: 0.4, mix: 0.58 },
+    delay:  { beats: 0.375, fb: 0.4, mix: 0.34 },
+  },
+
+  rainyPiano: {
+    tonic: 65, scale: 'majorPentatonic', bpm: 68,
+    progressions: [[1,3,6,4],[1,5,6,3],[1,2,6,5]],
+    chordExt: 'ninth', barsPerChord: 4,
+    bassStyle: 'none',
+    leadDensity: 0.1,
+    shimmerRate: 2,
+    swing: 0,
+    pad: { warmth: 0.88, sub: 0.18, amp: 0.055 },
+    reverb: { room: 0.96, damp: 0.24, mix: 1.32 },
+    delay:  { beats: 1.0, fb: 0.42, mix: 0.38 },
+  },
+
+  sunsetGroove: {
+    tonic: 55, scale: 'mixolydian', bpm: 102,
+    progressions: [[1,7,4,1],[1,5,4,1],[6,7,1,4]],
+    chordExt: 'thirteenth', barsPerChord: 2,
+    drumPattern: {
+      kick:  [1,0,0,0, 0,0,0.5,0, 1,0,0,0, 0,0,0.4,0],
+      snare: [0,0,0,0, 0.85,0,0,0, 0,0,0,0, 0.85,0,0,0],
+      hat:   [0.58,0.18,0.48,0.18, 0.58,0.18,0.48,0.24, 0.58,0.18,0.48,0.18, 0.58,0.18,0.48,0.26],
+    },
+    bassStyle: 'rootGroove',
+    leadDensity: 0.34,
+    shimmerRate: 1,
+    swing: 0.08,
+    pad: { warmth: 0.8, sub: 0.56, amp: 0.065 },
+    reverb: { room: 0.76, damp: 0.38, mix: 0.64 },
+    delay:  { beats: 0.5, fb: 0.36, mix: 0.32 },
   },
 };
 
