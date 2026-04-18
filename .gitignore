@@ -1,8 +1,10 @@
-node_modules/
+.build/
+.pi/
 dist/
+node_modules/
+*.tgz
 *.tsbuildinfo
 .DS_Store
-.beatly-audio-server.pid
 .beatly-audio-server.log
+.beatly-audio-server.pid
 playground/audio-tests/out/
-.build/

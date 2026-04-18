@@ -1,8 +1,0 @@
-node_modules/
-*.tsbuildinfo
-.DS_Store
-.beatly-audio-server.pid
-.beatly-audio-server.log
-playground/audio-tests/out/
-*.tgz
-.pi/
