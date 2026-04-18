@@ -47,7 +47,10 @@
     "sc:live": "sclang supercollider/play_beat.scd",
     "sc:generate": "sclang supercollider/generate.scd",
     "event": "npm run build && node dist/cli.js",
-    "build:codex-plugin": "node scripts/build-codex-plugin.mjs",
+    "build:distributions": "node scripts/build-distributions.mjs",
+    "build:codex-plugin": "node scripts/build-distributions.mjs --target=codex",
+    "build:claude-code": "node scripts/build-distributions.mjs --target=claude-code",
+    "build:pi-package": "node scripts/build-distributions.mjs --target=pi",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

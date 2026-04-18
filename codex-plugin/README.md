@@ -1,19 +1,18 @@
 # Beatly Codex plugin
 
-This directory is a build output for the local Codex plugin.
+This directory stores the source manifest and metadata for the Codex plugin build.
 
-Build or refresh it from the repo root:
+Build the self-contained Codex plugin from the repo root:
 
 ```bash
 npm run build:codex-plugin
 ```
 
-The generated plugin is self-contained for local Codex marketplace installs and includes:
+The generated plugin is written to:
 
-- `skills/beatly`
-- `dist/`
-- `supercollider/`
-- runtime `node_modules/`
+```text
+.build/distributions/codex/beatly
+```
 
 Hard dependency:
 

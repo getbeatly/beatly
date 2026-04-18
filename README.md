@@ -73,6 +73,34 @@ npm run sc:generate
   - a simple local jukebox control UI
 - When the server is running, the jukebox/control UI is available at `http://localhost:8080`.
 
+## Distribution builds
+
+Build all supported distribution artifacts:
+
+```bash
+npm run build:distributions
+```
+
+That writes temporary build outputs to:
+
+```text
+./.build/distributions
+```
+
+Current build targets:
+
+- `codex/` — self-contained Codex plugin bundle
+- `claude-code/` — self-contained Claude Code skill bundle
+- `pi/` — npm package tarball for pi installs
+
+Target individual outputs if needed:
+
+```bash
+npm run build:codex-plugin
+npm run build:claude-code
+npm run build:pi-package
+```
+
 ## Pi skill install
 
 This package now ships a standard pi skill at `skills/beatly`.
@@ -116,14 +144,14 @@ npm run build:codex-plugin
 That produces a local plugin under:
 
 ```text
-./codex-plugin
+./.build/distributions/codex/beatly
 ```
 
 For a repo-scoped Codex install, copy it into your repo and register it in a local marketplace:
 
 ```bash
 mkdir -p ./.agents/plugins ./plugins
-cp -R /absolute/path/to/beatly/codex-plugin ./plugins/beatly
+cp -R /absolute/path/to/beatly/.build/distributions/codex/beatly ./plugins/beatly
 ```
 
 Create or update `./.agents/plugins/marketplace.json`:
@@ -159,6 +187,27 @@ The generated Codex plugin is self-contained and includes:
 - `dist/`
 - `supercollider/`
 - runtime `node_modules/`
+
+## Claude Code install
+
+Build the Claude Code bundle:
+
+```bash
+npm run build:claude-code
+```
+
+That produces a self-contained skill bundle under:
+
+```text
+./.build/distributions/claude-code/beatly
+```
+
+A typical install is a symlink into Claude Code's skills directory:
+
+```bash
+mkdir -p ~/.claude/skills
+ln -s /absolute/path/to/beatly/.build/distributions/claude-code/beatly ~/.claude/skills/beatly
+```
 
 ## Agent skill shape
 

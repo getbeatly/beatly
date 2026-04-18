@@ -5,3 +5,4 @@ dist/
 .beatly-audio-server.pid
 .beatly-audio-server.log
 playground/audio-tests/out/
+.build/

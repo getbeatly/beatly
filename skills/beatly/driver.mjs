@@ -1,18 +1,19 @@
+import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const skillDir = path.dirname(fileURLToPath(import.meta.url));
-const packageRoot = path.resolve(skillDir, "../..");
+const runtimeRoot = findRuntimeRoot(skillDir);
 
-const { BeatlyConductor } = await import(pathToFileURL(path.join(packageRoot, "dist/index.js")).href);
-const { SuperColliderHelloAdapter } = await import(pathToFileURL(path.join(packageRoot, "dist/adapters.js")).href);
-const { createBeatlySkill } = await import(pathToFileURL(path.join(packageRoot, "dist/skill.js")).href);
+const { BeatlyConductor } = await import(pathToFileURL(path.join(runtimeRoot, "dist/index.js")).href);
+const { SuperColliderHelloAdapter } = await import(pathToFileURL(path.join(runtimeRoot, "dist/adapters.js")).href);
+const { createBeatlySkill } = await import(pathToFileURL(path.join(runtimeRoot, "dist/skill.js")).href);
 
 const [mode, ...args] = process.argv.slice(2);
 
 const adapter = new SuperColliderHelloAdapter({
   autostart: true,
-  serverCwd: path.join(packageRoot, "supercollider"),
+  serverCwd: path.join(runtimeRoot, "supercollider"),
 });
 await adapter.ensureReady();
 
@@ -70,3 +71,28 @@ if (mode === "override") {
 }
 
 throw new Error(`Unknown mode: ${mode}`);
+
+function findRuntimeRoot(startDir) {
+  const candidates = [];
+  let current = startDir;
+
+  while (true) {
+    candidates.push(current, path.join(current, "runtime"));
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  for (const candidate of candidates) {
+    if (
+      existsSync(path.join(candidate, "dist", "index.js")) &&
+      existsSync(path.join(candidate, "supercollider", "server.js"))
+    ) {
+      return candidate;
+    }
+  }
+
+  throw new Error(
+    `Could not locate Beatly runtime from ${startDir}. Expected dist/ and supercollider/ in an ancestor or runtime/ directory.`,
+  );
+}
