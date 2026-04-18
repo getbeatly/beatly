@@ -86,24 +86,50 @@ function buildCodexPlugin() {
 }
 
 function buildClaudeCodeBundle() {
-  const bundleRoot = path.join(buildRoot, "claude-code", "beatly");
-  assembleRuntimeBundle({ root: bundleRoot, mode: "skill-runtime" });
+  // Builds a Claude Code plugin in the layout required by the Claude Code
+  // marketplace schema (https://docs.claude.com ... plugins):
+  //
+  //   plugins/beatly/
+  //     .claude-plugin/plugin.json
+  //     skills/beatly/SKILL.md + *.sh + driver.mjs
+  //     runtime/ (dist, supercollider, node_modules, package.json)
+  //     LICENSE
+  //     README.md
+  //
+  // The marketplace catalog (.claude-plugin/marketplace.json) lives in the
+  // separate getbeatly/claude-code repo and points at this plugin directory.
+  const pluginRoot = path.join(buildRoot, "claude-code", "beatly");
+  rmIfExists(pluginRoot);
+  mkdirSync(path.join(pluginRoot, ".claude-plugin"), { recursive: true });
+  mkdirSync(path.join(pluginRoot, "skills"), { recursive: true });
+
+  copyDir(path.join(repoRoot, "skills", "beatly"), path.join(pluginRoot, "skills", "beatly"));
+  copyDir(path.join(repoRoot, "dist"), path.join(pluginRoot, "runtime", "dist"));
+  copyDir(path.join(repoRoot, "supercollider"), path.join(pluginRoot, "runtime", "supercollider"));
+  installRuntimeDependencies(path.join(pluginRoot, "runtime"));
+
+  cpSync(path.join(repoRoot, "LICENSE"), path.join(pluginRoot, "LICENSE"));
 
   writeFileSync(
-    path.join(bundleRoot, "INSTALL.md"),
+    path.join(pluginRoot, ".claude-plugin", "plugin.json"),
+    `${JSON.stringify(createClaudeCodePluginManifest(), null, 2)}\n`,
+  );
+
+  writeFileSync(
+    path.join(pluginRoot, "README.md"),
     [
       "# Beatly for Claude Code",
       "",
-      "This bundle is built from the main Beatly repo.",
+      "Built from [getbeatly/beatly](https://github.com/getbeatly/beatly).",
       "",
-      "Suggested install:",
+      "## Install",
       "",
-      "```bash",
-      "mkdir -p ~/.claude/skills",
-      `ln -s ${bundleRoot} ~/.claude/skills/beatly`,
+      "```",
+      "/plugin marketplace add getbeatly/claude-code",
+      "/plugin install beatly@beatly",
       "```",
       "",
-      "Hard dependency:",
+      "## Requirements",
       "",
       "- SuperCollider installed system-wide",
       "- `scsynth` on `PATH`",
@@ -111,6 +137,19 @@ function buildClaudeCodeBundle() {
       "",
     ].join("\n"),
   );
+}
+
+function createClaudeCodePluginManifest() {
+  return {
+    name: "beatly",
+    description: "Play a live, generative background soundtrack while Claude Code works. Mood follows what the agent is doing. Requires system-wide SuperCollider.",
+    version: pkg.version,
+    author: { name: "Beatly" },
+    homepage: "https://beatly.dev",
+    repository: "https://github.com/getbeatly/beatly",
+    license: "MIT",
+    keywords: ["music", "soundtrack", "supercollider", "audio", "ambient"],
+  };
 }
 
 function buildPiPackage() {

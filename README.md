@@ -25,12 +25,12 @@ The marketplace lives at [`getbeatly/codex`](https://github.com/getbeatly/codex)
 
 ### Claude Code
 
-Download `beatly-claude-code-vX.Y.Z.tar.gz` from the [latest release](https://github.com/getbeatly/beatly/releases/latest) and extract into Claude Code's skills directory:
-
-```bash
-mkdir -p ~/.claude/skills
-tar -xzf beatly-claude-code-*.tar.gz -C ~/.claude/skills
+```text
+/plugin marketplace add getbeatly/claude-code
+/plugin install beatly@beatly
 ```
+
+The marketplace lives at [`getbeatly/claude-code`](https://github.com/getbeatly/claude-code) and is auto-updated by CI on every release.
 
 ## Develop
 

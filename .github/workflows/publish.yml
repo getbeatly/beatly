@@ -74,7 +74,7 @@ jobs:
         with:
           repository: getbeatly/codex
           path: codex-marketplace
-          token: ${{ secrets.CODEX_MARKETPLACE_TOKEN }}
+          token: ${{ secrets.MARKETPLACE_TOKEN }}
 
       - name: Publish plugin to Codex marketplace
         working-directory: codex-marketplace
@@ -83,6 +83,33 @@ jobs:
           rm -rf beatly
           mkdir -p beatly
           cp -R ../.build/distributions/codex/beatly/. beatly/
+          git config user.name "beatly-bot"
+          git config user.email "bot@beatly.dev"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+            exit 0
+          fi
+          git commit -m "Update Beatly plugin to ${GITHUB_REF_NAME}"
+          git tag "${GITHUB_REF_NAME}"
+          git push origin main
+          git push origin "${GITHUB_REF_NAME}"
+
+      - name: Checkout Claude Code marketplace
+        uses: actions/checkout@v5
+        with:
+          repository: getbeatly/claude-code
+          path: claude-code-marketplace
+          token: ${{ secrets.MARKETPLACE_TOKEN }}
+
+      - name: Publish plugin to Claude Code marketplace
+        working-directory: claude-code-marketplace
+        run: |
+          set -euo pipefail
+          mkdir -p plugins
+          rm -rf plugins/beatly
+          mkdir -p plugins/beatly
+          cp -R ../.build/distributions/claude-code/beatly/. plugins/beatly/
           git config user.name "beatly-bot"
           git config user.email "bot@beatly.dev"
           git add -A
