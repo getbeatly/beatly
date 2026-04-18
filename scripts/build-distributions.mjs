@@ -57,7 +57,8 @@ function prepareBuildRoot(selectedTarget) {
 }
 
 function buildCodexPlugin() {
-  const pluginRoot = path.join(buildRoot, "codex", "beatly");
+  const codexRoot = path.join(buildRoot, "codex");
+  const pluginRoot = path.join(codexRoot, "beatly");
   mkdirSync(path.join(pluginRoot, ".codex-plugin"), { recursive: true });
   assembleRuntimeBundle({ root: pluginRoot, mode: "root" });
 
@@ -80,6 +81,34 @@ function buildCodexPlugin() {
       "- SuperCollider installed system-wide",
       "- `scsynth` on `PATH`",
       "- `sclang` on `PATH`",
+      "",
+    ].join("\n"),
+  );
+
+  // Marketplace manifest — so `codex marketplace add getbeatly/codex` works.
+  // Codex looks for `.agents/plugins/marketplace.json` at the repo root.
+  const marketplaceDir = path.join(codexRoot, ".agents", "plugins");
+  mkdirSync(marketplaceDir, { recursive: true });
+  writeFileSync(
+    path.join(marketplaceDir, "marketplace.json"),
+    `${JSON.stringify(createCodexMarketplaceManifest(), null, 2)}\n`,
+  );
+
+  writeFileSync(
+    path.join(codexRoot, "README.md"),
+    [
+      "# Beatly Codex marketplace",
+      "",
+      "Published automatically from https://github.com/getbeatly/beatly.",
+      "",
+      "## Install",
+      "",
+      "```",
+      "codex marketplace add https://github.com/getbeatly/codex",
+      "codex plugin install beatly",
+      "```",
+      "",
+      "Requires SuperCollider (`scsynth` + `sclang`) on `PATH`.",
       "",
     ].join("\n"),
   );
@@ -210,6 +239,30 @@ function installRuntimeDependencies(targetRoot) {
     stdio: "inherit",
     env: process.env,
   });
+}
+
+function createCodexMarketplaceManifest() {
+  return {
+    name: "beatly-marketplace",
+    interface: {
+      displayName: "Beatly Plugins",
+      shortDescription: "Live soundtrack controls for coding agents",
+    },
+    plugins: [
+      {
+        name: "beatly",
+        source: {
+          source: "local",
+          path: "./beatly",
+        },
+        policy: {
+          installation: "AVAILABLE",
+          authentication: "ON_INSTALL",
+        },
+        category: "Productivity",
+      },
+    ],
+  };
 }
 
 function createCodexPluginManifest() {

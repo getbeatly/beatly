@@ -80,9 +80,10 @@ jobs:
         working-directory: codex-marketplace
         run: |
           set -euo pipefail
-          rm -rf beatly
-          mkdir -p beatly
-          cp -R ../.build/distributions/codex/beatly/. beatly/
+          # Wipe everything except .git so removed files in the source disappear here too.
+          find . -mindepth 1 -maxdepth 1 -not -name '.git' -exec rm -rf {} +
+          # Copy the full Codex marketplace tree: plugin dir(s) + .agents/plugins/marketplace.json.
+          cp -R ../.build/distributions/codex/. ./
           git config user.name "beatly-bot"
           git config user.email "bot@beatly.dev"
           git add -A
