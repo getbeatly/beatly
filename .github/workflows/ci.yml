@@ -34,7 +34,7 @@ jobs:
         run: npm pack --dry-run
 
       - name: Upload distribution artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: beatly-distributions
           path: .build/distributions
