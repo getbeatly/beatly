@@ -68,3 +68,29 @@ jobs:
           files: |
             .build/distributions/beatly-codex-${{ github.ref_name }}.tar.gz
             .build/distributions/beatly-claude-code-${{ github.ref_name }}.tar.gz
+
+      - name: Checkout Codex marketplace
+        uses: actions/checkout@v5
+        with:
+          repository: getbeatly/codex
+          path: codex-marketplace
+          token: ${{ secrets.CODEX_MARKETPLACE_TOKEN }}
+
+      - name: Publish plugin to Codex marketplace
+        working-directory: codex-marketplace
+        run: |
+          set -euo pipefail
+          rm -rf beatly
+          mkdir -p beatly
+          cp -R ../.build/distributions/codex/beatly/. beatly/
+          git config user.name "beatly-bot"
+          git config user.email "bot@beatly.dev"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+            exit 0
+          fi
+          git commit -m "Update Beatly plugin to ${GITHUB_REF_NAME}"
+          git tag "${GITHUB_REF_NAME}"
+          git push origin main
+          git push origin "${GITHUB_REF_NAME}"

@@ -16,12 +16,12 @@ Then invoke `/skill:beatly`.
 
 ### Codex
 
-Download `beatly-codex-vX.Y.Z.tar.gz` from the [latest release](https://github.com/getbeatly/beatly/releases/latest), extract, and register in a local Codex marketplace:
-
 ```bash
-mkdir -p ~/.codex/plugins
-tar -xzf beatly-codex-*.tar.gz -C ~/.codex/plugins
+codex plugins marketplace add github:getbeatly/codex
+codex plugins install beatly
 ```
+
+The marketplace lives at [`getbeatly/codex`](https://github.com/getbeatly/codex) and is auto-updated by CI on every release.
 
 ### Claude Code
 
