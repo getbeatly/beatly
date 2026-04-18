@@ -50,6 +50,34 @@ npm run sc:live
 npm run sc:generate
 ```
 
+## Pi skill install
+
+This package now ships a standard pi skill at `skills/beatly`.
+
+Install it into another pi instance from git:
+
+```bash
+pi install git:github.com:getbeatly/beatly
+```
+
+Install it from npm after publishing:
+
+```bash
+pi install npm:@beatly/core
+```
+
+Install it only for the current project:
+
+```bash
+pi install -l git:github.com:getbeatly/beatly
+```
+
+After install, pi discovers the skill automatically from the package manifest and you can invoke it with:
+
+```bash
+/skill:beatly
+```
+
 ## Agent skill shape
 
 The skill now supports:
@@ -66,11 +94,27 @@ Example update payloads:
 { type: "playback.override", playback: { genre: "ambient", running: true } }
 ```
 
+## Publishing
+
+Build and verify the package:
+
+```bash
+npm run build
+npm pack --dry-run
+```
+
+Publish to npm:
+
+```bash
+npm publish --access public
+```
+
 ## Notes
 
 - `npm start` runs the main server, which spawns `scsynth`, serves the playground UI, and accepts control + agent-event HTTP commands.
 - `SuperColliderHelloAdapter` talks to the HTTP API exposed by `supercollider/server.js`.
 - Agent/event endpoints: `POST /api/agent` and `POST /api/event`.
 - Playground/control endpoints: `POST /api/control` and `POST /api/command`.
+- The bundled pi skill is named `beatly`, which matches the `skills/beatly` directory per the Agent Skills naming rules.
 - Supported genres: `ambient`, `calming`, `deepFocus`, `lofi`, `jazzNoir`, `techno`, `dnb`, `dub`, `uplift`, `neoSoul`, `dreamPop`, `soulHop`, `cityPop`, `bossaNova`, `chillHouse`, `rainyPiano`, `sunsetGroove`.
 - Expanded scale palette in the runtime includes `majorPentatonic`, `minorPentatonic`, `harmonicMinor`, `melodicMinor`, `doubleHarmonic`, and `wholeTone`, plus support for `thirteenth` chord extensions.

@@ -32,6 +32,7 @@
   },
   "files": [
     "dist",
+    "skills",
     "supercollider",
     "README.md",
     "LICENSE"
@@ -53,8 +54,14 @@
     "ai",
     "agents",
     "music",
-    "supercollider"
+    "supercollider",
+    "pi-package"
   ],
+  "pi": {
+    "skills": [
+      "./skills"
+    ]
+  },
   "dependencies": {
     "osc": "^2.4.5"
   },
