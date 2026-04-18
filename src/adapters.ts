@@ -36,6 +36,12 @@ export interface SuperColliderHelloAdapterOptions {
   readonly spawnCommand?: string;
   readonly spawnArgs?: readonly string[];
   readonly startupTimeoutMs?: number;
+  /**
+   * Spawn the server detached from the parent process so short-lived one-shot
+   * drivers (e.g. the Codex/Claude Code skill wrappers) can exit without
+   * killing the Beatly daemon. Defaults to true.
+   */
+  readonly detached?: boolean;
 }
 
 export class SuperColliderHelloAdapter {
@@ -48,6 +54,7 @@ export class SuperColliderHelloAdapter {
   private readonly spawnCommand: string;
   private readonly spawnArgs: readonly string[];
   private readonly startupTimeoutMs: number;
+  private readonly detached: boolean;
 
   private child: ChildProcess | null = null;
 
@@ -59,6 +66,7 @@ export class SuperColliderHelloAdapter {
     this.spawnCommand = options.spawnCommand ?? "node";
     this.spawnArgs = options.spawnArgs ?? [this.serverScript];
     this.startupTimeoutMs = options.startupTimeoutMs ?? 15_000;
+    this.detached = options.detached ?? true;
   }
 
   public async ensureReady(): Promise<SuperColliderServerState> {
@@ -80,6 +88,24 @@ export class SuperColliderHelloAdapter {
     }
 
     await access(resolve(this.serverCwd, this.serverScript), fsConstants.R_OK);
+
+    if (this.detached) {
+      // Daemon mode: spawn fully detached with no shared stdio, then release
+      // the handle so the parent (e.g. a one-shot skill driver) can exit
+      // without tearing the Beatly server down via SIGPIPE / fd close.
+      const child = spawn(this.spawnCommand, [...this.spawnArgs], {
+        cwd: this.serverCwd,
+        env: process.env,
+        detached: true,
+        stdio: "ignore",
+      });
+      child.unref();
+      // We intentionally drop the handle — ownership transfers to the OS.
+      // stopServer() becomes a no-op in detached mode; use the HTTP
+      // `session.stop` agent event / the dashboard to stop playback.
+      this.child = null;
+      return;
+    }
 
     this.child = spawn(this.spawnCommand, [...this.spawnArgs], {
       cwd: this.serverCwd,
