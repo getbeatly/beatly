@@ -4,6 +4,11 @@
   "description": "Beatly control layer and bundled SuperCollider runtime.",
   "type": "module",
   "license": "MIT",
+  "homepage": "https://beatly.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/getbeatly/beatly"
+  },
   "engines": {
     "node": ">=22.12.0"
   },
