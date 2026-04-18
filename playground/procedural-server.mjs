@@ -1,57 +1,49 @@
 import { createServer } from "node:http";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
-const SAMPLE_RATE = 44_100;
-const FRAMES_PER_CHUNK = 4_410; // 100ms
+const distUrl = new URL("../dist/procedural/index.js", import.meta.url);
+if (!existsSync(fileURLToPath(distUrl))) {
+  console.error(
+    "\n❌ dist/procedural/index.js not found. Run `npm run build` before starting the server.\n",
+  );
+  process.exit(1);
+}
 
-const MOOD_PROFILES = {
-  calming: { tempoBpm: 72, rootHz: 174.61, scale: [0, 3, 5, 7, 10], brightness: 0.35 },
-  "deep-focus": { tempoBpm: 86, rootHz: 164.81, scale: [0, 2, 3, 5, 7, 10], brightness: 0.4 },
-  flow: { tempoBpm: 102, rootHz: 146.83, scale: [0, 2, 4, 5, 7, 9, 11], brightness: 0.55 },
-  uplift: { tempoBpm: 124, rootHz: 130.81, scale: [0, 2, 4, 7, 9, 11], brightness: 0.7 },
-  neutral: { tempoBpm: 96, rootHz: 146.83, scale: [0, 2, 4, 5, 7, 9, 11], brightness: 0.5 },
-};
+const { createProceduralEngine, MOOD_PALETTES } = await import(distUrl.href);
 
-let control = null;
+const SAMPLE_RATE = 48_000;
+const CHANNELS = 2;
+const FRAMES_PER_CHUNK = 4_800; // 100 ms @ 48 kHz
+const CHUNK_INTERVAL_MS = Math.round((FRAMES_PER_CHUNK / SAMPLE_RATE) * 1000);
+const VALID_MOODS = new Set(Object.keys(MOOD_PALETTES));
+
+let engine = null;
+function ensureEngine() {
+  if (engine) return engine;
+  engine = createProceduralEngine({
+    mood: "flow",
+    sampleRate: SAMPLE_RATE,
+    intensity: 0.5,
+  });
+  return engine;
+}
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
 
-  if (req.method === "GET" && url.pathname === "/") {
-    sendHtml(res, HOME_HTML);
-    return;
-  }
-
-  if (req.method === "GET" && url.pathname === "/state") {
-    sendJson(res, 200, ensureControl().snapshot());
-    return;
-  }
+  if (req.method === "GET" && url.pathname === "/")      return sendHtml(res, HOME_HTML);
+  if (req.method === "GET" && url.pathname === "/state") return sendJson(res, 200, snapshot());
+  if (req.method === "GET" && url.pathname === "/audio") return streamAudio(res);
 
   if (req.method === "POST" && url.pathname === "/command") {
     try {
       const body = await readJsonBody(req);
-      const next = ensureControl().applyCommand(body);
-      sendJson(res, 200, { ok: true, state: next });
-    } catch (error) {
-      sendJson(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) });
+      applyCommand(body);
+      return sendJson(res, 200, { ok: true, state: snapshot() });
+    } catch (err) {
+      return sendJson(res, 400, { ok: false, error: String(err instanceof Error ? err.message : err) });
     }
-    return;
-  }
-
-  if (req.method === "POST" && url.pathname === "/agent") {
-    try {
-      const body = await readJsonBody(req);
-      const command = mapAgentEventToCommand(body?.event);
-      const next = ensureControl().applyCommand(command);
-      sendJson(res, 200, { ok: true, state: next, command });
-    } catch (error) {
-      sendJson(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) });
-    }
-    return;
-  }
-
-  if (req.method === "GET" && url.pathname === "/audio") {
-    streamAudio(res);
-    return;
   }
 
   sendJson(res, 404, { ok: false, error: "Not found" });
@@ -59,11 +51,8 @@ const server = createServer(async (req, res) => {
 
 const port = Number(process.env.PORT ?? 8787);
 server.listen(port, () => {
-  console.log(`🎧 Beatly procedural audio server listening on http://localhost:${port}`);
-  console.log(`   - UI:     http://localhost:${port}/`);
-  console.log(`   - Audio:  http://localhost:${port}/audio`);
-  console.log(`   - State:  http://localhost:${port}/state`);
-  console.log(`   - Command endpoint: POST /command`);
+  console.log(`🎧 Beatly  —  http://localhost:${port}`);
+  console.log(`   audio:  http://localhost:${port}/audio   (${SAMPLE_RATE} Hz, ${CHANNELS}ch)`);
 });
 
 function streamAudio(res) {
@@ -74,235 +63,63 @@ function streamAudio(res) {
     Connection: "keep-alive",
     "Access-Control-Allow-Origin": "*",
   });
+  res.write(streamingWavHeader(SAMPLE_RATE, CHANNELS));
+  const eng = ensureEngine();
+  const pcm = new Float32Array(FRAMES_PER_CHUNK * CHANNELS);
+  const out = Buffer.allocUnsafe(FRAMES_PER_CHUNK * CHANNELS * 2);
 
-  res.write(createStreamingWavHeader(SAMPLE_RATE));
+  const tick = () => {
+    eng.renderInto(pcm, FRAMES_PER_CHUNK, CHANNELS);
+    for (let i = 0; i < pcm.length; i += 1) {
+      const v = pcm[i];
+      const c = v < -1 ? -1 : v > 1 ? 1 : v;
+      out.writeInt16LE(c < 0 ? Math.round(c * 0x8000) : Math.round(c * 0x7fff), i * 2);
+    }
+    res.write(out);
+  };
 
-  const synth = new ProceduralSynth(() => ensureControl().step(FRAMES_PER_CHUNK));
-  const timer = setInterval(() => {
-    const chunk = synth.render(FRAMES_PER_CHUNK);
-    res.write(chunk);
-  }, Math.round((FRAMES_PER_CHUNK / SAMPLE_RATE) * 1_000));
-
+  const timer = setInterval(tick, CHUNK_INTERVAL_MS);
   const close = () => clearInterval(timer);
   res.on("close", close);
   res.on("error", close);
 }
 
-class SoundscapeControl {
-  #current;
-  #target;
-  #start;
-  #samplesLeft = 0;
-  #samplesTotal = 1;
+function streamingWavHeader(sampleRate, channels) {
+  const h = Buffer.alloc(44);
+  const byteRate = sampleRate * channels * 2;
+  h.write("RIFF", 0);
+  h.writeUInt32LE(0x7fffffff, 4);
+  h.write("WAVE", 8);
+  h.write("fmt ", 12);
+  h.writeUInt32LE(16, 16);
+  h.writeUInt16LE(1, 20);
+  h.writeUInt16LE(channels, 22);
+  h.writeUInt32LE(sampleRate, 24);
+  h.writeUInt32LE(byteRate, 28);
+  h.writeUInt16LE(channels * 2, 32);
+  h.writeUInt16LE(16, 34);
+  h.write("data", 36);
+  h.writeUInt32LE(0x7fffffff - 44, 40);
+  return h;
+}
 
-  constructor(initial) {
-    this.#current = { ...initial };
-    this.#target = { ...initial };
-    this.#start = { ...initial };
+function applyCommand(cmd) {
+  if (!cmd || typeof cmd !== "object") throw new Error("Command must be a JSON object");
+  const eng = ensureEngine();
+  if (typeof cmd.mood === "string" && VALID_MOODS.has(cmd.mood)) {
+    eng.setMood(cmd.mood);
   }
-
-  snapshot() {
-    return {
-      current: { ...this.#current },
-      target: { ...this.#target },
-      transitionSamplesLeft: this.#samplesLeft,
-    };
+  if (typeof cmd.intensity === "number" && Number.isFinite(cmd.intensity)) {
+    const transitionMs = typeof cmd.transitionMs === "number" ? cmd.transitionMs : 900;
+    eng.setIntensity(cmd.intensity, transitionMs);
   }
-
-  applyCommand(command) {
-    if (!command || typeof command !== "object") {
-      throw new Error("Command must be a JSON object");
-    }
-
-    const transitionMs = clamp(Math.trunc(toNumber(command.transitionMs, 900)), 0, 20_000);
-
-    const nextTarget = {
-      mood: validMood(command.mood) ? command.mood : this.#target.mood,
-      intensity: clamp01(toNumber(command.intensity, this.#target.intensity)),
-      warmth: clamp01(toNumber(command.warmth, this.#target.warmth)),
-      sparkle: clamp01(toNumber(command.sparkle, this.#target.sparkle)),
-      pulse: clamp01(toNumber(command.pulse, this.#target.pulse)),
-      space: clamp01(toNumber(command.space, this.#target.space)),
-    };
-
-    this.#start = { ...this.#current };
-    this.#target = nextTarget;
-    this.#samplesTotal = Math.max(1, Math.floor((transitionMs / 1_000) * SAMPLE_RATE));
-    this.#samplesLeft = this.#samplesTotal;
-
-    return this.snapshot();
-  }
-
-  step(frames) {
-    if (this.#samplesLeft <= 0) {
-      this.#current = { ...this.#target };
-      return { ...this.#current };
-    }
-
-    const consumed = Math.min(frames, this.#samplesLeft);
-    this.#samplesLeft -= consumed;
-
-    const progress = 1 - this.#samplesLeft / this.#samplesTotal;
-    const eased = easeInOutCubic(progress);
-
-    this.#current = {
-      mood: eased < 0.5 ? this.#start.mood : this.#target.mood,
-      intensity: mix(this.#start.intensity, this.#target.intensity, eased),
-      warmth: mix(this.#start.warmth, this.#target.warmth, eased),
-      sparkle: mix(this.#start.sparkle, this.#target.sparkle, eased),
-      pulse: mix(this.#start.pulse, this.#target.pulse, eased),
-      space: mix(this.#start.space, this.#target.space, eased),
-    };
-
-    return { ...this.#current };
+  if (typeof cmd.seed === "number" && Number.isFinite(cmd.seed)) {
+    eng.setSeed(cmd.seed >>> 0);
   }
 }
 
-class ProceduralSynth {
-  #phase = {
-    padA: 0,
-    padB: 0,
-    bass: 0,
-    lead: 0,
-    kick: 0,
-    lfo: 0,
-  };
-
-  #clockFrames = 0;
-  #lowpass = 0;
-  #delayBuffer = new Float32Array(Math.floor(SAMPLE_RATE * 0.7));
-  #delayIdx = 0;
-
-  constructor(getState) {
-    this.getState = getState;
-  }
-
-  render(frames) {
-    const state = this.getState();
-    const profile = MOOD_PROFILES[state.mood] ?? MOOD_PROFILES.neutral;
-    const out = Buffer.allocUnsafe(frames * 2);
-
-    const secPerBeat = 60 / profile.tempoBpm;
-    const progression = [0, 5, 3, 4];
-
-    for (let i = 0; i < frames; i += 1) {
-      const t = this.#clockFrames / SAMPLE_RATE;
-      const beat = t / secPerBeat;
-      const beatInBar = beat % 4;
-      const bar = Math.floor(beat / 4);
-
-      const chordDegree = progression[bar % progression.length] ?? 0;
-      const scale = profile.scale;
-      const root = semitone(profile.rootHz, scale[chordDegree % scale.length] ?? 0);
-
-      const padA = this.#osc("triangle", "padA", root * 0.5);
-      const padB = this.#osc("sine", "padB", root * 1.01);
-      const pad = (padA * 0.26 + padB * 0.22) * (0.88 - state.intensity * 0.2);
-
-      const bassEnv = 0.65 + 0.35 * Math.sin(2 * Math.PI * (beatInBar % 1));
-      const bass = this.#osc("sine", "bass", root * 0.25) * (0.16 + state.warmth * 0.26) * bassEnv;
-
-      const arpStep = Math.floor(beat * (2 + Math.floor(state.pulse * 2))) % scale.length;
-      const leadHz = semitone(root, scale[arpStep] ?? 0) * (1 + state.sparkle * 0.005);
-      const gate = 1 - ((beat * 2) % 1);
-      const lead = this.#osc("saw", "lead", leadHz) * gate * (0.08 + state.intensity * 0.22 + state.sparkle * 0.1);
-
-      const kickEnv = Math.exp(-12 * (beatInBar % 1));
-      const kickFreq = 46 + state.pulse * 24;
-      const kick = this.#osc("sine", "kick", kickFreq) * kickEnv * (0.08 + state.pulse * 0.22);
-
-      const shimmer = (Math.random() * 2 - 1) * (0.004 + state.sparkle * 0.02);
-
-      let dry = pad + bass + lead + kick + shimmer;
-
-      const cutoff = 0.02 + profile.brightness * 0.16 + state.intensity * 0.12;
-      this.#lowpass += (dry - this.#lowpass) * cutoff;
-      dry = this.#lowpass;
-
-      const delayLength = Math.floor(SAMPLE_RATE * (0.15 + state.space * 0.5));
-      const read = (this.#delayIdx - delayLength + this.#delayBuffer.length) % this.#delayBuffer.length;
-      const delayed = this.#delayBuffer[read] ?? 0;
-      const wet = dry + delayed * (0.18 + state.space * 0.38);
-      this.#delayBuffer[this.#delayIdx] = dry + delayed * 0.45;
-      this.#delayIdx = (this.#delayIdx + 1) % this.#delayBuffer.length;
-
-      const mastered = Math.tanh(wet * 1.5) * 0.85;
-      out.writeInt16LE(floatToInt16(mastered), i * 2);
-
-      this.#clockFrames += 1;
-    }
-
-    return out;
-  }
-
-  #osc(wave, phaseKey, hz) {
-    const p = this.#phase[phaseKey] ?? 0;
-    const next = (p + hz / SAMPLE_RATE) % 1;
-    this.#phase[phaseKey] = next;
-
-    switch (wave) {
-      case "sine":
-        return Math.sin(2 * Math.PI * next);
-      case "triangle":
-        return 2 * Math.abs(2 * next - 1) - 1;
-      case "saw":
-        return 2 * next - 1;
-      default:
-        return 0;
-    }
-  }
-}
-
-function ensureControl() {
-  if (control !== null) {
-    return control;
-  }
-
-  control = new SoundscapeControl({
-    mood: "flow",
-    intensity: 0.62,
-    warmth: 0.58,
-    sparkle: 0.38,
-    pulse: 0.64,
-    space: 0.4,
-  });
-
-  return control;
-}
-
-function mapAgentEventToCommand(event) {
-  switch (event) {
-    case "task.started":
-      return { mood: "deep-focus", intensity: 0.63, pulse: 0.55, sparkle: 0.26, transitionMs: 900 };
-    case "task.blocked":
-      return { mood: "calming", intensity: 0.42, warmth: 0.7, space: 0.55, transitionMs: 1200 };
-    case "task.completed":
-      return { mood: "uplift", intensity: 0.82, pulse: 0.86, sparkle: 0.62, transitionMs: 700 };
-    case "agent.idle":
-      return { mood: "neutral", intensity: 0.3, pulse: 0.3, sparkle: 0.2, transitionMs: 1400 };
-    default:
-      return { mood: "flow", intensity: 0.6, transitionMs: 900 };
-  }
-}
-
-function createStreamingWavHeader(sampleRate) {
-  const header = Buffer.alloc(44);
-  header.write("RIFF", 0);
-  header.writeUInt32LE(0x7fffffff, 4); // pseudo infinite length
-  header.write("WAVE", 8);
-
-  header.write("fmt ", 12);
-  header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20); // PCM
-  header.writeUInt16LE(1, 22); // mono
-  header.writeUInt32LE(sampleRate, 24);
-  header.writeUInt32LE(sampleRate * 2, 28);
-  header.writeUInt16LE(2, 32);
-  header.writeUInt16LE(16, 34);
-
-  header.write("data", 36);
-  header.writeUInt32LE(0x7fffffff - 44, 40);
-  return header;
+function snapshot() {
+  return ensureEngine().state;
 }
 
 function sendJson(res, status, payload) {
@@ -329,67 +146,21 @@ function readJsonBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
-
-    req.on("data", (chunk) => {
-      size += chunk.length;
-      if (size > 1024 * 64) {
-        reject(new Error("Body too large"));
-        req.destroy();
-        return;
-      }
-      chunks.push(chunk);
+    req.on("data", (c) => {
+      size += c.length;
+      if (size > 64 * 1024) { reject(new Error("Body too large")); req.destroy(); return; }
+      chunks.push(c);
     });
-
     req.on("end", () => {
       try {
         const text = Buffer.concat(chunks).toString("utf8").trim();
         resolve(text.length === 0 ? {} : JSON.parse(text));
-      } catch (error) {
+      } catch {
         reject(new Error("Invalid JSON body"));
       }
     });
-
     req.on("error", reject);
   });
-}
-
-function semitone(freq, offset) {
-  return freq * 2 ** (offset / 12);
-}
-
-function floatToInt16(v) {
-  const c = Math.max(-1, Math.min(1, v));
-  return c < 0 ? Math.round(c * 0x8000) : Math.round(c * 0x7fff);
-}
-
-function validMood(mood) {
-  return typeof mood === "string" && mood in MOOD_PROFILES;
-}
-
-function toNumber(value, fallback) {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  return fallback;
-}
-
-function mix(a, b, t) {
-  return a + (b - a) * t;
-}
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function clamp01(value) {
-  return clamp(value, 0, 1);
-}
-
-function easeInOutCubic(t) {
-  if (t < 0.5) {
-    return 4 * t * t * t;
-  }
-  return 1 - ((-2 * t + 2) ** 3) / 2;
 }
 
 const HOME_HTML = `<!doctype html>
@@ -397,199 +168,150 @@ const HOME_HTML = `<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Beatly Procedural Soundscape</title>
+  <title>Beatly</title>
   <style>
     :root {
       color-scheme: dark;
-      --bg-a: #0c1019;
-      --bg-b: #180f25;
-      --card: rgba(255,255,255,0.08);
-      --stroke: rgba(255,255,255,0.16);
+      --bg-a: #0a0d14;
+      --bg-b: #120a1d;
+      --card: rgba(255,255,255,0.06);
+      --stroke: rgba(255,255,255,0.12);
       --text: #ecf2ff;
-      --muted: #a9b8d4;
-      --accent: #7c92ff;
+      --muted: #98a7c3;
+      --accent: #8ea3ff;
+      --accent-dim: #8ea3ff33;
     }
-
     * { box-sizing: border-box; }
-
     body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      margin: 0; min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       color: var(--text);
       background:
-        radial-gradient(1200px 700px at 10% -10%, #2b3f7e70, transparent),
-        radial-gradient(1000px 700px at 90% 110%, #7228b255, transparent),
+        radial-gradient(900px 600px at 10% -10%, #2a3e7260, transparent),
+        radial-gradient(900px 600px at 90% 110%, #5b1f9a44, transparent),
         linear-gradient(120deg, var(--bg-a), var(--bg-b));
-      padding: 24px;
-    }
-
-    .wrap {
-      max-width: 900px;
-      margin: 0 auto;
+      padding: 48px 24px;
       display: grid;
-      gap: 18px;
+      place-items: center;
     }
+    .wrap { width: 100%; max-width: 520px; display: grid; gap: 28px; }
+    h1 { margin: 0; font-size: 22px; font-weight: 500; letter-spacing: 0.02em; opacity: 0.85; }
+    .subtitle { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
 
-    .card {
-      border: 1px solid var(--stroke);
-      background: var(--card);
-      border-radius: 16px;
-      padding: 16px;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 16px 36px rgba(0,0,0,0.28);
-    }
-
-    h1 { margin: 0 0 8px; font-size: 28px; }
-    p { margin: 0; color: var(--muted); }
-
-    .moods { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-
-    button {
-      background: #ffffff16;
+    .moods { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+    .moods button {
+      background: transparent;
       border: 1px solid var(--stroke);
       color: var(--text);
-      border-radius: 999px;
-      padding: 8px 14px;
+      padding: 12px 4px;
+      border-radius: 10px;
+      font-size: 12px;
+      letter-spacing: 0.02em;
       cursor: pointer;
+      transition: background 120ms, border-color 120ms;
     }
-
-    button:hover { border-color: #ffffff66; }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
+    .moods button.active {
+      background: var(--accent-dim);
+      border-color: var(--accent);
     }
+    .moods button:hover:not(.active) { border-color: #ffffff55; }
 
-    .control {
-      display: grid;
-      gap: 6px;
-      border: 1px solid #ffffff1f;
-      border-radius: 12px;
-      padding: 10px;
-      background: #00000022;
+    .intensity {
+      display: grid; gap: 10px;
+      padding: 18px 20px;
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      background: var(--card);
     }
-
-    label { font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; }
+    .intensity-head { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+    .intensity-head strong { color: var(--text); font-weight: 500; }
     input[type="range"] { width: 100%; accent-color: var(--accent); }
 
-    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    audio { width: 100%; }
-    pre { margin: 0; font-size: 12px; color: #d6e2ff; white-space: pre-wrap; }
+    audio { width: 100%; border-radius: 999px; }
 
-    @media (max-width: 760px) {
-      .grid { grid-template-columns: 1fr; }
+    .state {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px; color: var(--muted);
+      display: flex; gap: 16px; flex-wrap: wrap;
+      justify-content: center;
     }
+    .state span strong { color: var(--text); font-weight: 500; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
-      <h1>🎧 Beatly Procedural Soundscape</h1>
-      <p>Live server-generated soundtrack. Control it as human or from an agent command.</p>
-      <div class="row" style="margin-top: 12px">
-        <audio id="audio" controls autoplay src="/audio"></audio>
-      </div>
-      <div class="moods" id="moods"></div>
+    <div>
+      <h1>Beatly</h1>
+      <p class="subtitle">Procedural soundscape — stereo 48 kHz. Pick a mood, nudge intensity.</p>
     </div>
 
-    <div class="card grid" id="sliders"></div>
+    <audio id="audio" controls autoplay src="/audio"></audio>
 
-    <div class="card">
-      <div class="row">
-        <button data-event="task.started">Agent: task.started</button>
-        <button data-event="task.blocked">Agent: task.blocked</button>
-        <button data-event="task.completed">Agent: task.completed</button>
-        <button data-event="agent.idle">Agent: agent.idle</button>
+    <div class="moods" id="moods"></div>
+
+    <div class="intensity">
+      <div class="intensity-head">
+        <span>intensity</span>
+        <strong id="intensity-value">0.50</strong>
       </div>
-      <pre id="state" style="margin-top: 10px"></pre>
+      <input type="range" id="intensity" min="0" max="1" step="0.01" value="0.5" />
     </div>
+
+    <div class="state" id="state"></div>
   </div>
 
   <script>
-    const moods = ["calming", "deep-focus", "flow", "uplift", "neutral"];
-    const sliderDefs = [
-      ["intensity", 0.62],
-      ["warmth", 0.58],
-      ["sparkle", 0.38],
-      ["pulse", 0.64],
-      ["space", 0.40],
-    ];
+    const MOODS = ["calming", "deep-focus", "flow", "uplift", "neutral"];
+    let currentMood = "flow";
+    let currentIntensity = 0.5;
 
-    let selectedMood = "flow";
-    const values = Object.fromEntries(sliderDefs);
-
-    const moodWrap = document.getElementById("moods");
-    const sliders = document.getElementById("sliders");
+    const moodsWrap = document.getElementById("moods");
+    const intensity = document.getElementById("intensity");
+    const intensityValue = document.getElementById("intensity-value");
     const stateNode = document.getElementById("state");
 
-    moods.forEach((mood) => {
+    MOODS.forEach((m) => {
       const b = document.createElement("button");
-      b.textContent = mood;
+      b.textContent = m;
+      b.dataset.mood = m;
+      if (m === currentMood) b.classList.add("active");
       b.onclick = () => {
-        selectedMood = mood;
-        push({ mood });
+        currentMood = m;
+        for (const el of moodsWrap.children) el.classList.toggle("active", el.dataset.mood === m);
+        push();
       };
-      moodWrap.appendChild(b);
+      moodsWrap.appendChild(b);
     });
 
-    sliderDefs.forEach(([name, initial]) => {
-      const card = document.createElement("div");
-      card.className = "control";
-      card.innerHTML =
-        '<label><span>' + name + '</span><strong id="v-' + name + '">' + initial.toFixed(2) + '</strong></label>' +
-        '<input type="range" min="0" max="1" step="0.01" value="' + initial + '" id="' + name + '" />';
-      sliders.appendChild(card);
-
-      const input = card.querySelector("input");
-      const valueNode = card.querySelector("strong");
-      input.addEventListener("input", () => {
-        const value = Number(input.value);
-        values[name] = value;
-        valueNode.textContent = value.toFixed(2);
-        throttledPush();
-      });
+    let pushTimer;
+    intensity.addEventListener("input", () => {
+      currentIntensity = Number(intensity.value);
+      intensityValue.textContent = currentIntensity.toFixed(2);
+      clearTimeout(pushTimer);
+      pushTimer = setTimeout(push, 120);
     });
 
-    document.querySelectorAll("button[data-event]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const event = btn.getAttribute("data-event");
-        await fetch("/agent", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ event }),
-        });
-        refreshState();
-      });
-    });
-
-    let timer;
-    function throttledPush() {
-      clearTimeout(timer);
-      timer = setTimeout(() => push({}), 120);
-    }
-
-    async function push(overrides) {
-      const payload = {
-        ...values,
-        mood: selectedMood,
-        transitionMs: 900,
-        ...overrides,
-      };
-
+    async function push() {
       await fetch("/command", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          mood: currentMood,
+          intensity: currentIntensity,
+          transitionMs: 900,
+        }),
       });
-
-      refreshState();
     }
 
     async function refreshState() {
-      const data = await fetch("/state").then((r) => r.json());
-      stateNode.textContent = JSON.stringify(data, null, 2);
+      try {
+        const s = await fetch("/state").then((r) => r.json());
+        stateNode.innerHTML =
+          '<span>mood <strong>' + s.mood + '</strong></span>' +
+          '<span>bar <strong>' + s.bar + '</strong></span>' +
+          '<span>tempo <strong>' + s.tempoBpm.toFixed(1) + '</strong> bpm</span>' +
+          '<span>seed <strong>' + s.seed.toString(16) + '</strong></span>';
+      } catch {}
     }
 
     refreshState();

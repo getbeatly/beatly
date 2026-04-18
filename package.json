@@ -26,8 +26,8 @@
       "import": "./dist/adapters.js"
     },
     "./procedural": {
-      "types": "./dist/procedural.d.ts",
-      "import": "./dist/procedural.js"
+      "types": "./dist/procedural/index.d.ts",
+      "import": "./dist/procedural/index.js"
     },
     "./package.json": "./package.json"
   },
@@ -40,7 +40,9 @@
     "clean": "rm -rf dist",
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev:audio-server": "node playground/procedural-server.mjs",
+    "dev:audio-server": "npm run build && node playground/procedural-server.mjs",
+    "dev:audio-samples": "npm run build && node playground/audio-tests/render-sample.mjs",
+    "dev:audio-tour": "npm run build && node playground/audio-tests/tour.mjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
