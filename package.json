@@ -1,6 +1,6 @@
 {
   "name": "@beatly/core",
-  "version": "0.0.1",
+  "version": "0.2.2",
   "description": "Beatly control layer and bundled SuperCollider runtime.",
   "type": "module",
   "license": "MIT",

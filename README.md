@@ -1,25 +1,164 @@
 # @beatly/core
 
-Beatly now contains both the control layer and the SuperCollider runtime.
+> **A live, generative soundtrack for coding agents.**
+> Beatly reacts to agent events in real time, with a user-selectable vibe and a local jukebox-style control surface. See [beatly.dev](https://beatly.dev) for the product story.
 
-> SuperCollider is a hard system dependency. You must install SuperCollider system-wide so `scsynth` and `sclang` are available on your `PATH`.
+This repo contains:
 
-The local Beatly server and control UI are intended to follow the product and interaction design defined in `../beatly.dev`: Beatly should feel like a live soundtrack for coding agents, react to agent events in real time, and keep a user-selectable vibe through a simple local jukebox-style control surface.
+- the control layer and `@beatly/core` library
+- the bundled SuperCollider runtime (`supercollider/`) with server, UI, synthdefs, and `.scd` sources
+- a standard **pi** skill (`skills/beatly`)
+- build targets for a **Codex** plugin and a **Claude Code** skill bundle
 
-## What is in this repo now
+## Requirements
 
-- agent-event entrypoint (`@beatly/core/skill`)
-- recommendation/conductor layer (`@beatly/core`)
-- adapter for controlling the bundled SuperCollider server (`@beatly/core/adapters`)
-- genre catalog copied from the original SuperCollider project
-- bundled runtime under `supercollider/`
-  - `server.js`
-  - `music.js`
-  - `.scd` sources
-  - `public/` UI
-  - `synthdefs/`
+SuperCollider is a **hard system dependency** on every machine that runs Beatly. You must have:
 
-## Usage
+- Node.js 22+
+- SuperCollider installed system-wide
+- `scsynth` on `PATH`
+- `sclang` on `PATH`
+
+Without this, nothing in Beatly can start or render audio.
+
+---
+
+## Install for your agent
+
+Beatly ships in three shapes, one per target agent harness. All three drive the same local Beatly server (`http://localhost:8080`) and the same `skills/beatly` commands.
+
+### pi
+
+Install from npm (once published):
+
+```bash
+pi install npm:@beatly/core
+```
+
+Install from git:
+
+```bash
+pi install git:github.com:getbeatly/beatly
+```
+
+Install only for the current project:
+
+```bash
+pi install -l git:github.com:getbeatly/beatly
+```
+
+pi picks the skill up automatically via the package manifest. Invoke it with:
+
+```text
+/skill:beatly
+```
+
+### Codex
+
+Build the self-contained plugin:
+
+```bash
+npm run build:codex-plugin
+```
+
+The plugin is written to `./.build/distributions/codex/beatly` and is also published as `beatly-codex-vX.Y.Z.tar.gz` on every GitHub release.
+
+For a repo-scoped Codex install, drop it into your repo and register a local marketplace:
+
+```bash
+mkdir -p ./.agents/plugins ./plugins
+cp -R /absolute/path/to/beatly/.build/distributions/codex/beatly ./plugins/beatly
+```
+
+Create or update `./.agents/plugins/marketplace.json`:
+
+```json
+{
+  "name": "local-beatly",
+  "interface": { "displayName": "Local Beatly Plugins" },
+  "plugins": [
+    {
+      "name": "beatly",
+      "source": { "source": "local", "path": "./plugins/beatly" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
+    }
+  ]
+}
+```
+
+Restart Codex, open the plugin directory, pick the local marketplace, and install **Beatly**.
+
+The generated plugin is self-contained and includes `skills/beatly`, `dist/`, `supercollider/`, and runtime `node_modules/`.
+
+### Claude Code
+
+Build the self-contained skill bundle:
+
+```bash
+npm run build:claude-code
+```
+
+The bundle is written to `./.build/distributions/claude-code/beatly` and is also published as `beatly-claude-code-vX.Y.Z.tar.gz` on every GitHub release.
+
+A typical install is a symlink into Claude Code's skills directory:
+
+```bash
+mkdir -p ~/.claude/skills
+ln -s /absolute/path/to/beatly/.build/distributions/claude-code/beatly ~/.claude/skills/beatly
+```
+
+---
+
+## Running Beatly locally
+
+Start the main server (it spawns `scsynth`, serves the jukebox UI, and accepts control + agent-event HTTP commands):
+
+```bash
+npm start
+```
+
+Open the jukebox control UI at [http://localhost:8080](http://localhost:8080).
+
+HTTP API:
+
+- `POST /api/agent` — agent updates
+- `POST /api/event` — discrete agent events
+- `POST /api/control` — playback control
+- `POST /api/command` — direct commands
+
+Other runtime scripts:
+
+```bash
+npm run sc:start       # same as `npm start`
+npm run sc:build       # compile synthdefs
+npm run sc:live        # live.scd playground
+npm run sc:generate    # procedural render
+```
+
+---
+
+## Skill commands
+
+Once installed into pi, Codex, or Claude Code, the `beatly` skill exposes these shell entrypoints:
+
+```bash
+./event.sh task.started        # discrete lifecycle event
+./update.sh coding "Writing the refactor" 0.72 0.62 0.38
+                               # status | summary | focus | load | energy
+./override.sh lofi true        # genre + running flag (+ optional seed)
+./state.sh                     # inspect current state
+```
+
+Supported event types: `task.started`, `task.blocked`, `task.completed`, `agent.idle`, `agent.error`, `agent.breakthrough`.
+
+Supported genres: `ambient`, `calming`, `deepFocus`, `lofi`, `jazzNoir`, `techno`, `dnb`, `dub`, `uplift`, `neoSoul`, `dreamPop`, `soulHop`, `cityPop`, `bossaNova`, `chillHouse`, `rainyPiano`, `sunsetGroove`.
+
+---
+
+## Library usage
+
+You can also use `@beatly/core` directly from TypeScript if you are writing a custom agent integration:
 
 ```ts
 import { BeatlyConductor } from "@beatly/core";
@@ -30,7 +169,6 @@ const adapter = new SuperColliderHelloAdapter({
   autostart: true,
   serverCwd: "./supercollider",
 });
-
 await adapter.ensureReady();
 
 const conductor = new BeatlyConductor({ adapters: [adapter] });
@@ -44,180 +182,13 @@ await skill.handleEvent({ type: "task.completed" });
 await skill.stop("done");
 ```
 
-## Requirements
+The skill supports:
 
-- Node.js 22+
-- SuperCollider installed system-wide
-- `scsynth` available on `PATH`
-- `sclang` available on `PATH`
+- `handleEvent(...)` — discrete lifecycle events
+- `handleUpdate(...)` — richer status updates from an agent
+- `override(...)` — direct playback changes
 
-Without a system-wide SuperCollider install, Beatly cannot start or build its audio runtime.
-
-## Runtime commands
-
-```bash
-npm start
-npm run sc:start
-npm run sc:build
-npm run sc:live
-npm run sc:generate
-```
-
-## Local server UX
-
-- The local server is the runtime counterpart to the `beatly.dev` product design.
-- It should preserve the same core promises from `../beatly.dev`:
-  - reactive soundtrack behavior driven by agent activity
-  - real-time generative playback
-  - explicit mood/genre selection by the user
-  - a simple local jukebox control UI
-- When the server is running, the jukebox/control UI is available at `http://localhost:8080`.
-
-## Distribution builds
-
-Build all supported distribution artifacts:
-
-```bash
-npm run build:distributions
-```
-
-That writes temporary build outputs to:
-
-```text
-./.build/distributions
-```
-
-Current build targets:
-
-- `codex/` — self-contained Codex plugin bundle
-- `claude-code/` — self-contained Claude Code skill bundle
-- `pi/` — npm package tarball for pi installs
-
-Target individual outputs if needed:
-
-```bash
-npm run build:codex-plugin
-npm run build:claude-code
-npm run build:pi-package
-```
-
-## Pi skill install
-
-This package now ships a standard pi skill at `skills/beatly`.
-
-SuperCollider is still a hard dependency when this skill is installed in another pi instance. The target machine must have SuperCollider installed system-wide with `scsynth` and `sclang` on `PATH`.
-
-Install it into another pi instance from git:
-
-```bash
-pi install git:github.com:getbeatly/beatly
-```
-
-Install it from npm after publishing:
-
-```bash
-pi install npm:@beatly/core
-```
-
-Install it only for the current project:
-
-```bash
-pi install -l git:github.com:getbeatly/beatly
-```
-
-After install, pi discovers the skill automatically from the package manifest and you can invoke it with:
-
-```bash
-/skill:beatly
-```
-
-## Codex plugin install
-
-Beatly also supports Codex through a local plugin build that follows Codex's plugin and marketplace format.
-
-Build the self-contained local plugin:
-
-```bash
-npm run build:codex-plugin
-```
-
-That produces a local plugin under:
-
-```text
-./.build/distributions/codex/beatly
-```
-
-For a repo-scoped Codex install, copy it into your repo and register it in a local marketplace:
-
-```bash
-mkdir -p ./.agents/plugins ./plugins
-cp -R /absolute/path/to/beatly/.build/distributions/codex/beatly ./plugins/beatly
-```
-
-Create or update `./.agents/plugins/marketplace.json`:
-
-```json
-{
-  "name": "local-beatly",
-  "interface": {
-    "displayName": "Local Beatly Plugins"
-  },
-  "plugins": [
-    {
-      "name": "beatly",
-      "source": {
-        "source": "local",
-        "path": "./plugins/beatly"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    }
-  ]
-}
-```
-
-Then restart Codex, open the plugin directory, choose the local marketplace, and install `Beatly`.
-
-The generated Codex plugin is self-contained and includes:
-
-- `skills/beatly`
-- `dist/`
-- `supercollider/`
-- runtime `node_modules/`
-
-## Claude Code install
-
-Build the Claude Code bundle:
-
-```bash
-npm run build:claude-code
-```
-
-That produces a self-contained skill bundle under:
-
-```text
-./.build/distributions/claude-code/beatly
-```
-
-A typical install is a symlink into Claude Code's skills directory:
-
-```bash
-mkdir -p ~/.claude/skills
-ln -s /absolute/path/to/beatly/.build/distributions/claude-code/beatly ~/.claude/skills/beatly
-```
-
-## Agent skill shape
-
-The skill now supports:
-
-- `handleEvent(...)` for discrete lifecycle events
-- `handleUpdate(...)` for richer status updates from an agent
-- `override(...)` for direct playback changes
-
-Example update payloads:
+Example payloads:
 
 ```ts
 { type: "agent.update", status: "thinking", summary: "Planning the refactor" }
@@ -225,37 +196,61 @@ Example update payloads:
 { type: "playback.override", playback: { genre: "ambient", running: true } }
 ```
 
-## Publishing
+---
 
-Build and verify locally:
+## Building distribution artifacts
+
+Build every target at once:
 
 ```bash
-npm run build
 npm run build:distributions
-npm pack --dry-run
 ```
 
-Publishing is done from CI on version tags. The publish workflow:
-
-- publishes `@beatly/core` to npm
-- builds all distribution bundles
-- uploads build artifacts from `.build/distributions`
-- attaches Codex and Claude Code bundle archives to the GitHub release
-
-Create a release tag:
+Or target one:
 
 ```bash
-git tag v0.x.y
-git push origin v0.x.y
+npm run build:pi-package       # npm tarball for pi
+npm run build:codex-plugin     # Codex plugin bundle
+npm run build:claude-code      # Claude Code skill bundle
 ```
+
+Outputs go to `./.build/distributions/{pi,codex,claude-code}/`.
+
+---
+
+## Releasing
+
+Bump the version and tag it. CI handles the rest:
+
+```bash
+# edit package.json version, or:
+npm version patch --no-git-tag-version
+
+git commit -am "Release v0.x.y"
+git tag v0.x.y
+git push && git push --tags
+```
+
+On any `v*` tag, `.github/workflows/publish.yml`:
+
+1. Syncs `package.json` version with the tag (`npm version`)
+2. Builds the library and all distribution bundles
+3. Publishes `@beatly/core` to npm with provenance
+4. Uploads `pi/`, `codex/`, and `claude-code/` artifacts
+5. Attaches `beatly-codex-vX.Y.Z.tar.gz` and `beatly-claude-code-vX.Y.Z.tar.gz` to the GitHub release
+
+Check the run with:
+
+```bash
+gh run list --workflow "Publish to npm"
+gh release list
+```
+
+---
 
 ## Notes
 
-- SuperCollider is a required system dependency; Beatly will not work without a system-wide install that provides `scsynth` and `sclang`.
-- `npm start` runs the main server, which spawns `scsynth`, serves the local jukebox/playground UI at `http://localhost:8080`, and accepts control + agent-event HTTP commands.
+- `skills/beatly` matches the Agent Skills naming convention; pi, Codex, and Claude Code all auto-discover it.
 - `SuperColliderHelloAdapter` talks to the HTTP API exposed by `supercollider/server.js`.
-- Agent/event endpoints: `POST /api/agent` and `POST /api/event`.
-- Playground/control endpoints: `POST /api/control` and `POST /api/command`.
-- The bundled pi skill is named `beatly`, which matches the `skills/beatly` directory per the Agent Skills naming rules.
-- Supported genres: `ambient`, `calming`, `deepFocus`, `lofi`, `jazzNoir`, `techno`, `dnb`, `dub`, `uplift`, `neoSoul`, `dreamPop`, `soulHop`, `cityPop`, `bossaNova`, `chillHouse`, `rainyPiano`, `sunsetGroove`.
-- Expanded scale palette in the runtime includes `majorPentatonic`, `minorPentatonic`, `harmonicMinor`, `melodicMinor`, `doubleHarmonic`, and `wholeTone`, plus support for `thirteenth` chord extensions.
+- The expanded scale palette in the runtime includes `majorPentatonic`, `minorPentatonic`, `harmonicMinor`, `melodicMinor`, `doubleHarmonic`, and `wholeTone`, plus `thirteenth` chord extensions.
+- Product/UX direction lives in [`../beatly.dev`](https://beatly.dev): Beatly must feel like a live soundtrack for coding agents — reactive, real-time, and always under user control.
