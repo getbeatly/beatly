@@ -1,15 +1,18 @@
 ---
 name: beatly
-description: Play a live, generative background soundtrack while you work. Beatly gives any coding agent a local music server whose mood follows what the agent is actually doing — thinking, coding, blocked, shipping — and lets the agent pick the vibe itself.
+description: Score the agent's run in real time. Beatly procedurally generates music live while you code — every note synthesized on the fly and matched to what's happening right now (planning, writing code, running tests, hitting blockers, shipping). Not a playlist. The music is the work.
 ---
 
 # Beatly
 
-Beatly lets any coding agent run a nice background soundtrack while it works, and lets the agent choose what's playing based on its current mood and whatever is going on in the task right now.
+Beatly **procedurally generates music live** while the coding agent works. It's not a playlist or a streaming service — a local SuperCollider engine synthesizes every note in real time, and the agent steers the composition so the soundtrack matches what is *actually happening in the task right now*.
+
+Your job as the agent: keep the music honest to the run.
 
 - **Starting a long task?** pick something focused.
 - **Stuck or blocked?** ease off to something calming.
 - **Tests just went green?** celebrate with something energetic.
+- **Shipping / task done?** push to uplift.
 - **Just idle?** ambient.
 
 You don't narrate the music to the user unless they ask — just keep the vibe matched to the work.

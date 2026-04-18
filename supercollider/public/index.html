@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>beatly — local jukebox</title>
+<title>beatly — procedurally generated soundtrack for coding agents</title>
 <style>
   :root {
     --bg: #0A0A0A;
@@ -378,11 +378,12 @@
           <span class="hero-name">beatly</span>
         </div>
 
-        <p class="eyebrow">now composing</p>
-        <h1>a live music soundtrack <span>for coding agents</span></h1>
+        <p class="eyebrow">now composing · live</p>
+        <h1>a procedurally generated soundtrack <span>for coding agents</span></h1>
         <p class="sub">
-          Beatly listens to your agent's tool calls, diffs, and test runs — and scores them in real time.
-          Pick a mood and let the local jukebox ride.
+          Not a playlist. Every note is synthesized in real time by a local SuperCollider engine and
+          scored to what your agent is doing right now — tool calls, diffs, tests going green,
+          blockers, breakthroughs. The music <em>is</em> the agent's run.
         </p>
 
         <div class="status-strip">
@@ -398,7 +399,7 @@
             <span id="toggleIcon" class="play-icon">▶</span>
           </button>
           <div class="now-playing">
-            <div class="muted mono">local jukebox</div>
+            <div class="muted mono">composing live</div>
             <div id="currentGenre" class="genre">Loading…</div>
           </div>
         </section>

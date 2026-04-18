@@ -72,9 +72,11 @@ function buildCodexPlugin() {
     [
       "# Beatly Codex plugin",
       "",
-      "Built from the main Beatly repo.",
+      "**A procedurally generated soundtrack, composed live while your Codex agent works.**",
       "",
-      "Install with a Codex marketplace entry that points to this plugin directory.",
+      "Not a playlist. Every note is synthesized in real time by a local SuperCollider engine and scored to what the agent is doing right now — tool calls, diffs, tests going green, blockers, breakthroughs.",
+      "",
+      "Built from the main Beatly repo. Install with a Codex marketplace entry that points to this plugin directory.",
       "",
       "Hard dependency:",
       "",
@@ -99,14 +101,20 @@ function buildCodexPlugin() {
     [
       "# Beatly Codex marketplace",
       "",
+      "**A procedurally generated soundtrack, composed live while your Codex agent works.**",
+      "",
+      "Not a playlist. Every note is synthesized in real time and scored to what the agent is doing right now — tool calls, diffs, tests, blockers, breakthroughs. The music _is_ the agent's run.",
+      "",
       "Published automatically from https://github.com/getbeatly/beatly.",
       "",
       "## Install",
       "",
-      "```",
+      "```bash",
       "codex marketplace add https://github.com/getbeatly/codex",
-      "codex plugin install beatly",
+      "codex --enable plugins",
       "```",
+      "",
+      "Then, inside the Codex TUI, run `/plugins` and install **beatly** from the **Beatly Plugins** marketplace.",
       "",
       "Requires SuperCollider (`scsynth` + `sclang`) on `PATH`.",
       "",
@@ -149,6 +157,10 @@ function buildClaudeCodeBundle() {
     [
       "# Beatly for Claude Code",
       "",
+      "**A procedurally generated soundtrack, composed live while Claude Code works.**",
+      "",
+      "Not a playlist. Every note is synthesized in real time by a local SuperCollider engine and scored to what Claude Code is doing right now — tool calls, diffs, tests going green, blockers, breakthroughs. The music _is_ the agent's run.",
+      "",
       "Built from [getbeatly/beatly](https://github.com/getbeatly/beatly).",
       "",
       "## Install",
@@ -171,13 +183,13 @@ function buildClaudeCodeBundle() {
 function createClaudeCodePluginManifest() {
   return {
     name: "beatly",
-    description: "Play a live, generative background soundtrack while Claude Code works. Mood follows what the agent is doing. Requires system-wide SuperCollider.",
+    description: "A procedurally generated soundtrack, composed live while Claude Code works. Every note is synthesized in real time and scored to what the agent is doing right now — tool calls, diffs, tests, blockers, breakthroughs. Not a playlist. Requires system-wide SuperCollider.",
     version: pkg.version,
     author: { name: "Beatly" },
     homepage: "https://beatly.dev",
     repository: "https://github.com/getbeatly/beatly",
     license: "MIT",
-    keywords: ["music", "soundtrack", "supercollider", "audio", "ambient"],
+    keywords: ["music", "soundtrack", "generative", "procedural", "supercollider", "audio", "agents"],
   };
 }
 
@@ -246,7 +258,7 @@ function createCodexMarketplaceManifest() {
     name: "beatly-marketplace",
     interface: {
       displayName: "Beatly Plugins",
-      shortDescription: "Live soundtrack controls for coding agents",
+      shortDescription: "Procedurally generated soundtrack, composed live while your coding agent works",
     },
     plugins: [
       {
@@ -269,7 +281,7 @@ function createCodexPluginManifest() {
   return {
     name: "beatly",
     version: pkg.version,
-    description: "Live soundtrack controls for coding agents. Requires system-wide SuperCollider.",
+    description: "A procedurally generated soundtrack, composed live while your coding agent works. Every note is synthesized in real time and scored to what the agent is doing right now. Requires system-wide SuperCollider.",
     author: {
       name: "Beatly",
       url: "https://beatly.dev",
@@ -281,9 +293,9 @@ function createCodexPluginManifest() {
     skills: "./skills/",
     interface: {
       displayName: "Beatly",
-      shortDescription: "Live soundtrack controls for coding agents",
+      shortDescription: "Procedurally generated music, composed live while your agent codes",
       longDescription:
-        "Control Beatly playback, agent-reactive soundtrack updates, and the local jukebox from Codex. Requires system-wide SuperCollider with scsynth and sclang on PATH.",
+        "Beatly procedurally generates a soundtrack for your coding agent in real time. A local SuperCollider engine synthesizes every note on the fly, and the agent steers the composition so the music matches what is actually happening in the task right now — tool calls, diffs, tests going green, blockers, breakthroughs. Not a playlist. The music is the agent's run. Requires system-wide SuperCollider with scsynth and sclang on PATH.",
       developerName: "Beatly",
       category: "Productivity",
       capabilities: ["Read", "Write"],

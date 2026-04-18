@@ -1,8 +1,12 @@
 # Beatly
 
-> A live, generative soundtrack for coding agents. See [beatly.dev](https://beatly.dev).
+> **A procedurally generated soundtrack, composed live while your coding agent works.**
+>
+> Beatly is not a playlist. Every note is synthesized in real time by a local SuperCollider engine and scored to what your agent is *actually doing right now* — the tool call it's running, the diff it's writing, the tests going green, the blocker it just hit, the task it just shipped.
+>
+> The music **is** the agent's run. See [beatly.dev](https://beatly.dev).
 
-Requires SuperCollider installed system-wide (`scsynth` and `sclang` on `PATH`) and Node.js 22+.
+Runs 100% locally. Requires SuperCollider installed system-wide (`scsynth` and `sclang` on `PATH`) and Node.js 22+.
 
 ## Install
 
@@ -17,9 +21,11 @@ Then invoke `/skill:beatly`.
 ### Codex
 
 ```bash
-codex plugins marketplace add github:getbeatly/codex
-codex plugins install beatly
+codex marketplace add https://github.com/getbeatly/codex
+codex --enable plugins
 ```
+
+Then inside the Codex TUI, run `/plugins` and install **beatly** from the **Beatly Plugins** marketplace.
 
 The marketplace lives at [`getbeatly/codex`](https://github.com/getbeatly/codex) and is auto-updated by CI on every release.
 
