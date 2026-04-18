@@ -264,12 +264,12 @@
     display: grid;
     gap: 16px;
     margin-top: 24px;
-    grid-template-columns: 1.1fr 0.9fr;
+    grid-template-columns: 1fr;
   }
 
   .genre-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 10px;
   }
 
@@ -307,45 +307,6 @@
     border-color: rgba(255, 46, 136, 0.55);
   }
 
-  .genre-title {
-    all: unset;
-    display: grid;
-    gap: 3px;
-    cursor: pointer;
-    padding: 4px 2px;
-  }
-
-  .variant-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 8px;
-  }
-
-  .variant-chip {
-    all: unset;
-    cursor: pointer;
-    font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, Menlo, monospace;
-    font-size: 11px;
-    padding: 3px 8px;
-    border-radius: 999px;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    background: rgba(255, 255, 255, 0.02);
-    transition: border-color .12s, color .12s, background .12s;
-  }
-
-  .variant-chip:hover {
-    color: var(--fg);
-    border-color: rgba(250, 250, 250, 0.2);
-  }
-
-  .variant-chip.active {
-    background: rgba(255, 46, 136, 0.18);
-    border-color: rgba(255, 46, 136, 0.6);
-    color: var(--fg);
-  }
-
   .actions {
     display: grid;
     gap: 10px;
@@ -379,53 +340,6 @@
     color: var(--muted);
   }
 
-  .meter-list {
-    display: grid;
-    gap: 12px;
-  }
-
-  .meter-head {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    font-size: 13px;
-    margin-bottom: 6px;
-  }
-
-  .meter-track {
-    height: 10px;
-    border-radius: 999px;
-    overflow: hidden;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.04);
-  }
-
-  .meter-fill {
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent-3));
-    width: 0%;
-    transition: width .18s ease-out;
-  }
-
-  pre {
-    margin: 0;
-    padding: 16px;
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    background: rgba(0, 0, 0, 0.35);
-    overflow: auto;
-    font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  .footer-note {
-    margin-top: 18px;
-    color: var(--muted);
-    font-size: 13px;
-  }
-
   a { color: inherit; }
 
   @media (max-width: 980px) {
@@ -446,7 +360,6 @@
   @media (prefers-reduced-motion: reduce) {
     body::before,
     .hero-mark-center,
-    .meter-fill,
     button,
     .play-button { animation: none; transition: none; }
   }
@@ -468,15 +381,14 @@
         <p class="eyebrow">now composing</p>
         <h1>a live music soundtrack <span>for coding agents</span></h1>
         <p class="sub">
-          Beatly listens to your agent's tool calls, diffs, and test runs — and scores them.
-          In real time. Pick a mood, keep the vibe, and steer the local jukebox while the server runs.
+          Beatly listens to your agent's tool calls, diffs, and test runs — and scores them in real time.
+          Pick a mood and let the local jukebox ride.
         </p>
 
         <div class="status-strip">
           <div class="pill"><span id="runDot" class="pill-dot"></span><strong id="runLabel">offline</strong></div>
           <div class="pill">genre <strong id="heroProfile">—</strong></div>
           <div class="pill">bpm <strong id="heroBpm">—</strong></div>
-          <div class="pill">port <strong id="heroPort">—</strong></div>
         </div>
       </section>
 
@@ -488,18 +400,15 @@
           <div class="now-playing">
             <div class="muted mono">local jukebox</div>
             <div id="currentGenre" class="genre">Loading…</div>
-            <div class="muted">Open this control surface at <strong id="uiUrl">—</strong></div>
           </div>
         </section>
 
         <section class="card pad" aria-label="quick actions">
-          <p class="section-title">quick actions</p>
           <div class="actions">
             <div class="row">
-              <button id="stop" class="button-stop button-stop-primary">⏹ stop music</button>
-              <button id="randomize" class="button-accent">🎲 randomize seed</button>
+              <button id="stop" class="button-stop button-stop-primary">⏹ stop</button>
+              <button id="randomize" class="button-accent">🎲 new seed</button>
             </div>
-            <button id="panic" class="button-subtle">panic / free all nodes</button>
           </div>
         </section>
       </aside>
@@ -509,22 +418,6 @@
       <section class="card pad" aria-label="genres">
         <p class="section-title">pick a mood</p>
         <div id="profiles" class="genre-grid"></div>
-      </section>
-
-      <section class="card pad" aria-label="state overview">
-        <p class="section-title">engine state</p>
-        <div class="meter-list">
-          <div>
-            <div class="meter-head"><span>motion</span><span id="motionValue">0%</span></div>
-            <div class="meter-track"><div id="motionFill" class="meter-fill"></div></div>
-          </div>
-          <div>
-            <div class="meter-head"><span>spark</span><span id="sparkValue">0%</span></div>
-            <div class="meter-track"><div id="sparkFill" class="meter-fill"></div></div>
-          </div>
-        </div>
-        <div class="footer-note">The server state below updates live from the local Beatly runtime.</div>
-        <pre id="state">…</pre>
       </section>
     </div>
   </main>
@@ -560,54 +453,18 @@ const PROFILE_META = {
 
 let lastState = null;
 
-function uiUrl() {
-  return window.location.origin;
-}
-
 function niceName(id) {
   return PROFILE_META[id]?.label ?? id;
 }
 
-function pct(value) {
-  return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`;
-}
-
-function deriveMotion(state) {
-  if (!state || !state.running) return 0;
-  const bpmNorm = Math.min((state.bpm ?? 0) / 180, 1);
-  return Math.max(0.18, bpmNorm);
-}
-
-function deriveSpark(state) {
-  if (!state || !state.running) return 0;
-  const genre = state.profile ?? '';
-  const energetic = ['techno', 'dnb', 'uplift', 'cityPop', 'chillHouse'];
-  const warm = ['neoSoul', 'dreamPop', 'soulHop', 'sunsetGroove', 'jazzNoir', 'bossaNova'];
-  if (energetic.includes(genre)) return 0.82;
-  if (warm.includes(genre)) return 0.62;
-  return 0.42;
-}
-
-function renderMeters(state) {
-  const motion = deriveMotion(state);
-  const spark = deriveSpark(state);
-  document.getElementById('motionFill').style.width = pct(motion);
-  document.getElementById('motionValue').textContent = pct(motion);
-  document.getElementById('sparkFill').style.width = pct(spark);
-  document.getElementById('sparkValue').textContent = pct(spark);
-}
-
 function renderState(state) {
   lastState = state;
-  document.getElementById('state').textContent = JSON.stringify(state, null, 2);
   const genreLabel = niceName(state.genre ?? (state.profile ? state.profile.split('.')[0] : null));
   const variantLabel = state.variant ?? (state.profile ? state.profile.split('.')[1] : null);
   const display = variantLabel ? `${genreLabel} · ${variantLabel}` : genreLabel;
   document.getElementById('currentGenre').textContent = display;
   document.getElementById('heroProfile').textContent = display;
   document.getElementById('heroBpm').textContent = state.bpm ?? '—';
-  document.getElementById('heroPort').textContent = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
-  document.getElementById('uiUrl').textContent = uiUrl();
 
   const running = !!state.running;
   document.getElementById('runLabel').textContent = running ? 'live' : 'stopped';
@@ -622,45 +479,20 @@ function renderState(state) {
     wrap.innerHTML = '';
     for (const genre of genres) {
       const meta = PROFILE_META[genre.id] ?? { label: genre.id, blurb: 'live generative profile' };
-      const card = document.createElement('div');
+      const card = document.createElement('button');
+      card.type = 'button';
       card.className = 'genre-btn';
       card.dataset.id = genre.id;
-      const title = document.createElement('button');
-      title.type = 'button';
-      title.className = 'genre-title';
-      title.innerHTML = `<span class="title">${meta.label}</span><span class="meta">${meta.blurb}</span>`;
-      title.onclick = () => api('/api/control', { genre: genre.id, running: true }).then((r) => renderState(r.state ?? r));
-      card.appendChild(title);
-      const chips = document.createElement('div');
-      chips.className = 'variant-row';
-      for (const v of genre.variants) {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'variant-chip';
-        chip.dataset.genre = genre.id;
-        chip.dataset.variant = v;
-        chip.textContent = v;
-        chip.onclick = (e) => {
-          e.stopPropagation();
-          api('/api/control', { genre: genre.id, variant: v, running: true }).then((r) => renderState(r.state ?? r));
-        };
-        chips.appendChild(chip);
-      }
-      card.appendChild(chips);
+      card.innerHTML = `<span class="title">${meta.label}</span><span class="meta">${meta.blurb}</span>`;
+      card.onclick = () => api('/api/control', { genre: genre.id, running: true }).then((r) => renderState(r.state ?? r));
       wrap.appendChild(card);
     }
   }
 
   const activeGenre = state.genre ?? (state.profile ? state.profile.split('.')[0] : null);
-  const activeVariant = state.variant ?? (state.profile ? state.profile.split('.')[1] : null);
   for (const card of wrap.children) {
     card.classList.toggle('active', card.dataset.id === activeGenre);
-    for (const chip of card.querySelectorAll('.variant-chip')) {
-      chip.classList.toggle('active', card.dataset.id === activeGenre && chip.dataset.variant === activeVariant);
-    }
   }
-
-  renderMeters(state);
 }
 
 async function refresh() {
@@ -686,11 +518,6 @@ document.getElementById('stop').onclick = async () => {
 document.getElementById('randomize').onclick = async () => {
   const r = await api('/api/control', { randomize: true, running: true });
   renderState(r.state ?? r);
-};
-
-document.getElementById('panic').onclick = async () => {
-  await api('/api/panic', {});
-  await refresh();
 };
 
 refresh();

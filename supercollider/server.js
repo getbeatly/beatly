@@ -252,7 +252,15 @@ function applyControl(body) {
   // `genre` + `variant` fields. Always normalize to a full "genre.variant".
   const requestedProfile = body.profile ?? body.genre ?? null;
   if (requestedProfile) {
-    const resolved = resolveProfileId(requestedProfile, body.variant);
+    let variant = body.variant;
+    // If a genre was selected without an explicit variant, pick one at random.
+    if (!variant && body.genre && !body.profile) {
+      const genre = GENRES[body.genre];
+      if (genre && genre.variantIds?.length) {
+        variant = genre.variantIds[Math.floor(Math.random() * genre.variantIds.length)];
+      }
+    }
+    const resolved = resolveProfileId(requestedProfile, variant);
     if (resolved && PROFILES[resolved]) {
       state.profile = resolved; dirty = true;
     }
