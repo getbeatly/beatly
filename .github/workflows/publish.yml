@@ -9,7 +9,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - name: Checkout
@@ -28,7 +28,34 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Build distributions
+        run: npm run build:distributions
+
+      - name: Archive Codex bundle
+        run: tar -C .build/distributions/codex -czf .build/distributions/beatly-codex-${GITHUB_REF_NAME}.tar.gz beatly
+
+      - name: Archive Claude Code bundle
+        run: tar -C .build/distributions/claude-code -czf .build/distributions/beatly-claude-code-${GITHUB_REF_NAME}.tar.gz beatly
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: beatly-release-distributions-${{ github.ref_name }}
+          path: |
+            .build/distributions/codex
+            .build/distributions/claude-code
+            .build/distributions/pi
+            .build/distributions/*.tar.gz
+          if-no-files-found: error
+
       - name: Publish
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Attach release bundles
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            .build/distributions/beatly-codex-${{ github.ref_name }}.tar.gz
+            .build/distributions/beatly-claude-code-${{ github.ref_name }}.tar.gz

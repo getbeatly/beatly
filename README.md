@@ -227,17 +227,26 @@ Example update payloads:
 
 ## Publishing
 
-Build and verify the package:
+Build and verify locally:
 
 ```bash
 npm run build
+npm run build:distributions
 npm pack --dry-run
 ```
 
-Publish to npm:
+Publishing is done from CI on version tags. The publish workflow:
+
+- publishes `@beatly/core` to npm
+- builds all distribution bundles
+- uploads build artifacts from `.build/distributions`
+- attaches Codex and Claude Code bundle archives to the GitHub release
+
+Create a release tag:
 
 ```bash
-npm publish --access public
+git tag v0.x.y
+git push origin v0.x.y
 ```
 
 ## Notes

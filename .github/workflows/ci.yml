@@ -27,5 +27,15 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Build distributions
+        run: npm run build:distributions
+
       - name: Pack (dry run)
         run: npm pack --dry-run
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: beatly-distributions
+          path: .build/distributions
+          if-no-files-found: error
