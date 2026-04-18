@@ -25,6 +25,10 @@
       "types": "./dist/adapters.d.ts",
       "import": "./dist/adapters.js"
     },
+    "./procedural": {
+      "types": "./dist/procedural.d.ts",
+      "import": "./dist/procedural.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -36,6 +40,7 @@
     "clean": "rm -rf dist",
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev:audio-server": "node playground/procedural-server.mjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
