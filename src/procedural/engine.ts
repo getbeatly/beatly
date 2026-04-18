@@ -58,7 +58,7 @@ import { createSparkleVoice, type SparkleVoice } from "./voices/sparkle.js";
 import { encodeWavPcm16Mono, encodeWavPcm16Stereo } from "./wav.js";
 
 const BLOCK_SIZE = 128;
-const MIN_CHORD_BARS = 2;
+const DEFAULT_CHORD_BARS = 2;
 const BARS_PER_PROGRESSION = 8;
 
 // ---------------------------------------------------------------------------
@@ -141,6 +141,12 @@ export function createProceduralEngine(options: ProceduralEngineOptions): Proced
     initial: clamp01(options.intensity ?? 0.5),
   });
 
+  // Instant dynamic reaction envelopes (for "immediate" feel on intensity changes).
+  let liftEnv = 0; // intensity pushed up
+  let dropEnv = 0; // intensity pulled down
+  const liftDecay = Math.exp(-1 / (0.45 * sampleRate));
+  const dropDecay = Math.exp(-1 / (0.65 * sampleRate));
+
   const clock: TempoClock = createTempoClock({
     sampleRate,
     initialBpm: palette.tempoBpmDefault,
@@ -179,6 +185,8 @@ export function createProceduralEngine(options: ProceduralEngineOptions): Proced
   let chordIdx = 0;
   let prevVoicing: Voicing | null = null;
   let prevBass: number | null = null;
+  let currentChordRootMidi = palette.tonicMidi;
+  let currentChordPitches: readonly number[] = [palette.tonicMidi, palette.tonicMidi + 4, palette.tonicMidi + 7];
   let lastBarIndex = -1;
   let lastBeatInt = -1;
 
@@ -196,7 +204,8 @@ export function createProceduralEngine(options: ProceduralEngineOptions): Proced
   };
 
   const applyNextChord = (barIndex: number): void => {
-    if (barIndex !== 0 && barIndex % MIN_CHORD_BARS !== 0) return;
+    const chordBars = chordBarsFor(mood, intensitySmoother.value);
+    if (barIndex !== 0 && barIndex % chordBars !== 0) return;
     const step = prog.current.steps[chordIdx % prog.current.steps.length];
     if (!step) return;
     const chord = resolveChord(mood, palette, step);
@@ -218,27 +227,14 @@ export function createProceduralEngine(options: ProceduralEngineOptions): Proced
 
     pad.setVoicing(voicing.pitches);
     sparkle.setChordTones(voicing.pitches);
+    currentChordRootMidi = chord.rootMidi;
+    currentChordPitches = chord.pitches;
+
     const b = pickBassMidi(chord.rootMidi, prevBass);
     bass.trigger(b);
     prevVoicing = voicing;
     prevBass = b;
     chordIdx += 1;
-  };
-
-  // Kick trigger rules, derived from mood × pulse.
-  const kickBeatsFor = (m: BeatlyMood, pulse: number): ReadonlySet<number> => {
-    if (pulse < 0.2) return EMPTY_SET;
-    switch (m) {
-      case "calming":
-      case "deep-focus":
-      case "neutral":
-        return BEATS_1_3;
-      case "flow":
-      case "uplift":
-        return pulse > 0.55 ? BEATS_ALL : BEATS_1_3;
-      default:
-        return BEATS_1_3;
-    }
   };
 
   // Kick off.
@@ -261,12 +257,20 @@ export function createProceduralEngine(options: ProceduralEngineOptions): Proced
       };
     },
     setIntensity(value: number, transitionMs = 900) {
+      const target = clamp01(value);
+      const delta = target - intensitySmoother.value;
+      if (delta > 0.03) {
+        liftEnv = clamp01(liftEnv + delta * 1.4);
+      } else if (delta < -0.03) {
+        dropEnv = clamp01(dropEnv + -delta * 1.2);
+      }
+
       const next = createOnePoleSmoother({
         controlPeriodSec,
         tauSec: tauFromTransitionMs(transitionMs),
         initial: intensitySmoother.value,
       });
-      next.target(clamp01(value));
+      next.target(target);
       intensitySmoother = next;
     },
     setMood(next) {
@@ -312,23 +316,35 @@ export function createProceduralEngine(options: ProceduralEngineOptions): Proced
           // Progression rotation every N bars.
           prog.tick();
 
-          // 25% chance to softly retrigger one pad voice at the bar — gives
-          // the pad a gentle swell and breaks up the drone feel.
-          if (humanizePrng.next() < 0.25) {
+          // Mood-dependent pad swell chance to add phrasing movement.
+          if (humanizePrng.next() < padRetriggerChance(mood, intensitySmoother.value)) {
             pad.gateOn(); // simple common-gate re-attack; all voices softly swell
           }
 
           applyNextChord(clock.bar);
         }
 
-        // Beat-boundary kick scheduling with velocity humanisation.
+        // Beat-boundary rhythm scheduling.
         const curBeatInt = Math.floor(clock.beat);
         if (curBeatInt !== lastBeatInt) {
           const m = deriveMacros(palette, intensitySmoother.value);
-          const kickBeats = kickBeatsFor(mood, m.pulse);
+          const rhythm = rhythmPatternFor(mood, m.pulse);
           for (let b = lastBeatInt + 1; b <= curBeatInt; b += 1) {
             const beatInBar = ((b % clock.beatsPerBar) + clock.beatsPerBar) % clock.beatsPerBar;
-            if (kickBeats.has(beatInBar)) kick.trigger();
+            if (rhythm.kickBeats.has(beatInBar)) kick.trigger();
+
+            if (rhythm.bassBeats.has(beatInBar)) {
+              const nextBass = bassPatternMidiFor({
+                mood,
+                beatInBar,
+                pulse: m.pulse,
+                rootMidi: currentChordRootMidi,
+                chordPitches: currentChordPitches,
+                prevBass,
+              });
+              bass.trigger(nextBass);
+              prevBass = nextBass;
+            }
           }
           lastBeatInt = curBeatInt;
         }
@@ -341,26 +357,45 @@ export function createProceduralEngine(options: ProceduralEngineOptions): Proced
           const [ambL, ambR] = ambience.render();
           const [spkL, spkR] = sparkle.render();
 
-          const duck = sidechain.process(kickSample);
+          // Fast transient dynamics so intensity changes feel immediate.
+          const lift = liftEnv;
+          const drop = dropEnv;
+          liftEnv *= liftDecay;
+          dropEnv *= dropDecay;
+
+          const kickDyn = kickSample * (1 + 0.55 * lift) * (1 - 0.45 * drop);
+          const bassDyn = bassSample * (1 + 0.20 * lift) * (1 - 0.30 * drop);
+          const padGain = 1 - 0.22 * lift + 0.10 * drop;
+          const ambGain = 1 - 0.30 * lift + 0.18 * drop;
+          const spkGain = 1 + 0.10 * lift - 0.20 * drop;
+
+          const padDynL = padL * padGain;
+          const padDynR = padR * padGain;
+          const ambDynL = ambL * ambGain;
+          const ambDynR = ambR * ambGain;
+          const spkDynL = spkL * spkGain;
+          const spkDynR = spkR * spkGain;
+
+          const duck = sidechain.process(kickDyn);
 
           // Dry sum: pad/sparkle/ambience are ducked by the kick; bass isn't
           // (to keep the low end steady).
-          const dryL = padL * duck + bassSample + kickSample + ambL * duck + spkL * duck;
-          const dryR = padR * duck + bassSample + kickSample + ambR * duck + spkR * duck;
+          const dryL = padDynL * duck + bassDyn + kickDyn + ambDynL * duck + spkDynL * duck;
+          const dryR = padDynR * duck + bassDyn + kickDyn + ambDynR * duck + spkDynR * duck;
 
           // Reverb sends per §4.x (pad 0.55, bass 0.10, kick 0.08, sparkle 0.9, ambience 0.7).
           const sendL =
-            padL * 0.55 * duck +
-            bassSample * 0.10 +
-            kickSample * 0.08 +
-            spkL * 0.9 +
-            ambL * 0.7;
+            padDynL * 0.55 * duck +
+            bassDyn * 0.10 +
+            kickDyn * 0.08 +
+            spkDynL * 0.9 +
+            ambDynL * 0.7;
           const sendR =
-            padR * 0.55 * duck +
-            bassSample * 0.10 +
-            kickSample * 0.08 +
-            spkR * 0.9 +
-            ambR * 0.7;
+            padDynR * 0.55 * duck +
+            bassDyn * 0.10 +
+            kickDyn * 0.08 +
+            spkDynR * 0.9 +
+            ambDynR * 0.7;
           const [wetL, wetR] = reverb.process(sendL, sendR);
 
           const mixL = dryL + wetL * reverb.wetMix;
@@ -454,6 +489,137 @@ function randomSessionSeed(mood: BeatlyMood, sampleRate: number): number {
 const EMPTY_SET: ReadonlySet<number> = new Set();
 const BEATS_1_3: ReadonlySet<number> = new Set([0, 2]);
 const BEATS_ALL: ReadonlySet<number> = new Set([0, 1, 2, 3]);
+const BEATS_1_2_3_4: ReadonlySet<number> = new Set([0, 1, 2, 3]);
+const BEATS_1_2_4: ReadonlySet<number> = new Set([0, 1, 3]);
+
+interface RhythmPattern {
+  kickBeats: ReadonlySet<number>;
+  bassBeats: ReadonlySet<number>;
+}
+
+function rhythmPatternFor(mood: BeatlyMood, pulse: number): RhythmPattern {
+  if (pulse < 0.2) {
+    return { kickBeats: EMPTY_SET, bassBeats: new Set([0]) };
+  }
+
+  switch (mood) {
+    case "calming":
+      return {
+        // jazzy + relaxed: sparse kick, walking-ish bass at higher pulse
+        kickBeats: BEATS_1_3,
+        bassBeats: pulse > 0.45 ? BEATS_1_2_3_4 : BEATS_1_3,
+      };
+    case "deep-focus":
+      return {
+        // rock-like: backbeat support and quarter bass when energetic
+        kickBeats: pulse > 0.55 ? BEATS_ALL : BEATS_1_3,
+        bassBeats: pulse > 0.55 ? BEATS_1_2_3_4 : BEATS_1_3,
+      };
+    case "flow":
+      return {
+        // electronic drive: four-on-the-floor + quarter bass
+        kickBeats: BEATS_ALL,
+        bassBeats: BEATS_1_2_3_4,
+      };
+    case "uplift":
+      return {
+        // brighter pop/electronic pulse
+        kickBeats: BEATS_ALL,
+        bassBeats: BEATS_1_2_4,
+      };
+    case "neutral":
+    default:
+      return {
+        kickBeats: BEATS_1_3,
+        bassBeats: pulse > 0.6 ? BEATS_1_2_3_4 : BEATS_1_3,
+      };
+  }
+}
+
+function bassPatternMidiFor(args: {
+  mood: BeatlyMood;
+  beatInBar: number;
+  pulse: number;
+  rootMidi: number;
+  chordPitches: readonly number[];
+  prevBass: number | null;
+}): number {
+  const { mood, beatInBar, pulse, rootMidi, chordPitches, prevBass } = args;
+
+  const third = chordPitches[1] ?? rootMidi + 4;
+  const fifth = chordPitches[2] ?? rootMidi + 7;
+  const seventh = chordPitches[chordPitches.length - 1] ?? (rootMidi + 10);
+
+  switch (mood) {
+    case "calming": {
+      // light jazz walk: root → 3rd → 5th → 7th (last step only when pulse allows)
+      if (beatInBar === 0) return fitBassRangeNear(rootMidi, prevBass);
+      if (beatInBar === 1) return fitBassRangeNear(third, prevBass);
+      if (beatInBar === 2) return fitBassRangeNear(fifth, prevBass);
+      return pulse > 0.45 ? fitBassRangeNear(seventh, prevBass) : fitBassRangeNear(rootMidi, prevBass);
+    }
+    case "deep-focus": {
+      // rock movement: root with fifth/octave alternation.
+      if (beatInBar === 1 || beatInBar === 3) return fitBassRangeNear(rootMidi + 7, prevBass);
+      if (beatInBar === 2) return fitBassRangeNear(rootMidi + 12, prevBass);
+      return fitBassRangeNear(rootMidi, prevBass);
+    }
+    case "flow": {
+      // electronic pulse: root-octave-fifth-octave.
+      if (beatInBar === 1 || beatInBar === 3) return fitBassRangeNear(rootMidi + 12, prevBass);
+      if (beatInBar === 2) return fitBassRangeNear(rootMidi + 7, prevBass);
+      return fitBassRangeNear(rootMidi, prevBass);
+    }
+    case "uplift": {
+      if (beatInBar === 1 || beatInBar === 3) return fitBassRangeNear(rootMidi + 7, prevBass);
+      return fitBassRangeNear(rootMidi, prevBass);
+    }
+    case "neutral":
+    default:
+      return beatInBar === 2 ? fitBassRangeNear(rootMidi + 7, prevBass) : fitBassRangeNear(rootMidi, prevBass);
+  }
+}
+
+function fitBassRangeNear(targetMidi: number, prevBass: number | null): number {
+  const candidates: number[] = [];
+  for (let n = targetMidi - 36; n <= targetMidi + 36; n += 12) {
+    if (n >= 36 && n <= 48) candidates.push(n);
+  }
+  if (candidates.length === 0) return pickBassMidi(targetMidi, prevBass);
+  const anchor = prevBass ?? 42;
+  candidates.sort((a, b) => Math.abs(a - anchor) - Math.abs(b - anchor));
+  return candidates[0] ?? 42;
+}
+
+function chordBarsFor(mood: BeatlyMood, intensity: number): number {
+  const t = clamp01(intensity);
+  if (t < 0.78) return DEFAULT_CHORD_BARS;
+  switch (mood) {
+    case "flow":
+    case "uplift":
+    case "deep-focus":
+      return 1;
+    default:
+      return DEFAULT_CHORD_BARS;
+  }
+}
+
+function padRetriggerChance(mood: BeatlyMood, intensity: number): number {
+  const t = clamp01(intensity);
+  switch (mood) {
+    case "calming":
+      return 0.18 + t * 0.12;
+    case "deep-focus":
+      return 0.22 + t * 0.20;
+    case "flow":
+      return 0.30 + t * 0.24;
+    case "uplift":
+      return 0.34 + t * 0.22;
+    case "neutral":
+    default:
+      return 0.22 + t * 0.16;
+  }
+}
 
 const MASTER_HEADROOM = 0.5;
 const CEILING = 0.98;

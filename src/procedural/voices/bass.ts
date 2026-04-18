@@ -3,8 +3,9 @@
  *
  * - Sine fundamental + 0.35 triangle one octave up.
  * - 24 dB/oct low-pass (two cascaded 12 dB SVFs) @ 160 + 120 * warmth Hz.
- * - ADSR: A 8 / D 120 / S 0.7 / R 180 ms. Legato ties: if a new note
- *   arrives while still in sustain, just update the pitch.
+ * - ADSR: A 8 / D 120 / S 0.7 / R 180 ms.
+ * - Notes retrigger on each scheduled hit so rhythmic patterns have clear
+ *   articulation (instead of continuous drone-like legato).
  * - One-pole HPF @ 40 Hz to keep the sub tight.
  * - Centred pan.
  */
@@ -49,10 +50,7 @@ export function createBassVoice(sampleRate: number): BassVoice {
     },
     trigger(midi: number) {
       targetFreqHz = 440 * Math.pow(2, (midi - 69) / 12);
-      // Legato: only retrigger if the envelope is idle/released.
-      if (env.stage === "idle" || env.stage === "release") {
-        env.gateOn();
-      }
+      env.gateOn();
     },
     gateOff() {
       env.gateOff();

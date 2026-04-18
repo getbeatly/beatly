@@ -110,7 +110,7 @@ function applyCommand(cmd) {
     eng.setMood(cmd.mood);
   }
   if (typeof cmd.intensity === "number" && Number.isFinite(cmd.intensity)) {
-    const transitionMs = typeof cmd.transitionMs === "number" ? cmd.transitionMs : 900;
+    const transitionMs = typeof cmd.transitionMs === "number" ? cmd.transitionMs : 180;
     eng.setIntensity(cmd.intensity, transitionMs);
   }
   if (typeof cmd.seed === "number" && Number.isFinite(cmd.seed)) {
@@ -298,7 +298,7 @@ const HOME_HTML = `<!doctype html>
         body: JSON.stringify({
           mood: currentMood,
           intensity: currentIntensity,
-          transitionMs: 900,
+          transitionMs: 180,
         }),
       });
     }
