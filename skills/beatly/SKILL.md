@@ -7,34 +7,59 @@ description: Control the local Beatly SuperCollider soundtrack server. Use when 
 
 Use this skill when you want the coding soundtrack to react to agent activity or when you want direct control over Beatly playback.
 
-This skill should be used in a way that matches the Beatly product design from `../beatly.dev`: a live soundtrack for coding agents, reactive to events in real time, with clear user-facing mood control.
+This skill should be used in a way that matches the Beatly product design from `beatly.dev`: a live soundtrack for coding agents, reactive to events in real time, with clear user-facing mood control.
 
 ## What this skill controls
 
-This project runs a local Beatly server at `http://127.0.0.1:8080`.
-
-The server:
+A local Beatly server at `http://127.0.0.1:8080`, which:
 - spawns `scsynth`
-- serves the local jukebox/playground UI
+- serves the local jukebox/playground UI (open it at http://localhost:8080)
 - accepts direct control commands
 - accepts agent event commands
 
-While the server is running, the user can always open the jukebox control UI at `http://localhost:8080`.
+## Paths
 
-## Setup
+All scripts live here and can be invoked by **absolute path from any cwd**:
 
-SuperCollider is a hard dependency for this skill. It must be installed system-wide on the machine running pi, and both `scsynth` and `sclang` must be available on `PATH`.
-
-Before sending commands, make sure the server is running:
-
-```bash
-npm start
+```
+/home/yuval/dev/beatly/skills/beatly/state.sh
+/home/yuval/dev/beatly/skills/beatly/event.sh
+/home/yuval/dev/beatly/skills/beatly/update.sh
+/home/yuval/dev/beatly/skills/beatly/override.sh
 ```
 
-If needed, inspect current state:
+Runtime root (the repo with `dist/` and `supercollider/`): `/home/yuval/dev/beatly`
+
+## Requirements
+
+SuperCollider must be installed system-wide: both `scsynth` and `sclang` must be on `PATH`. If either is missing, stop and tell the user clearly.
+
+## Starting the server
+
+**You usually do not need to start the server manually.** The first call to any of the four scripts (`state.sh`, `event.sh`, `update.sh`, `override.sh`) will autostart the server via `SuperColliderHelloAdapter({ autostart: true })` in `driver.mjs`. Just call the script you actually want.
+
+To check whether it's already up without side effects:
 
 ```bash
-./state.sh
+curl -sf http://127.0.0.1:8080/api/state >/dev/null && echo up || echo down
+```
+
+If you want to start it explicitly in the background (e.g. to watch logs):
+
+```bash
+cd /home/yuval/dev/beatly
+nohup npm start >/tmp/beatly.log 2>&1 & disown
+# then: tail -f /tmp/beatly.log
+```
+
+## Stopping the server
+
+There is no shutdown HTTP endpoint. The node process title is `node supercollider/server.js` (it does **not** contain "beatly"), so a naive `pkill -f beatly` will miss it. Use:
+
+```bash
+pkill -f 'supercollider/server.js'   # kills the node server; scsynth exits with it
+# verify:
+pgrep -af 'supercollider/server.js|scsynth'
 ```
 
 ## Commands
@@ -42,19 +67,19 @@ If needed, inspect current state:
 ### Send a discrete agent event
 
 ```bash
-./event.sh task.started
-./event.sh task.blocked
-./event.sh task.completed
-./event.sh agent.idle
-./event.sh agent.error
-./event.sh agent.breakthrough
+/home/yuval/dev/beatly/skills/beatly/event.sh task.started
+/home/yuval/dev/beatly/skills/beatly/event.sh task.blocked
+/home/yuval/dev/beatly/skills/beatly/event.sh task.completed
+/home/yuval/dev/beatly/skills/beatly/event.sh agent.idle
+/home/yuval/dev/beatly/skills/beatly/event.sh agent.error
+/home/yuval/dev/beatly/skills/beatly/event.sh agent.breakthrough
 ```
 
 ### Send a richer status update
 
 ```bash
-./update.sh coding "Implementing feature"
-./update.sh thinking "Planning refactor" 0.72 0.62 0.38
+/home/yuval/dev/beatly/skills/beatly/update.sh coding "Implementing feature"
+/home/yuval/dev/beatly/skills/beatly/update.sh thinking "Planning refactor" 0.72 0.62 0.38
 ```
 
 Arguments for `update.sh`:
@@ -67,27 +92,45 @@ Arguments for `update.sh`:
 ### Manual override
 
 ```bash
-./override.sh lofi true
-./override.sh ambient true 12345
+/home/yuval/dev/beatly/skills/beatly/override.sh lofi true
+/home/yuval/dev/beatly/skills/beatly/override.sh ambient true 12345
 ```
 
 Arguments for `override.sh`:
-1. genre
+1. genre (see list below)
 2. running: `true|false`
-3. seed: optional
+3. seed: optional integer
 
 ### Inspect state
 
 ```bash
-./state.sh
+/home/yuval/dev/beatly/skills/beatly/state.sh
 ```
+
+Returns JSON of shape:
+
+```json
+{
+  "profile": "sunsetGroove",
+  "seed": 701337117,
+  "bpm": 102,
+  "bar": 1,
+  "running": true,
+  "profiles": ["ambient", "calming", "deepFocus", "lofi", "jazzNoir", "techno",
+               "dnb", "dub", "uplift", "neoSoul", "dreamPop", "soulHop", "cityPop",
+               "bossaNova", "chillHouse", "rainyPiano", "sunsetGroove"],
+  "lastAgentEvent": null
+}
+```
+
+The `profiles` array is the canonical list of valid genres for `override.sh`.
 
 ## Preferred behavior
 
 - For task lifecycle changes, prefer `event.sh`.
 - For nuanced progress reports from an agent, prefer `update.sh`.
-- For explicit user requests like “play lofi” or “stop music”, prefer `override.sh`.
-- Remind the user that they can always use the local jukebox UI at `http://localhost:8080` while the server is running.
-- After sending a command, summarize the returned state briefly.
-- If the server is unavailable, say so clearly and suggest `npm start`.
-- If `scsynth` or `sclang` are missing, say clearly that SuperCollider must be installed system-wide first.
+- For explicit user requests like "play lofi" or "stop music", prefer `override.sh` (use `override.sh <genre> false` to pause).
+- After sending a command, summarize the returned state briefly (profile, bpm, running).
+- Remind the user once per session that the jukebox UI lives at http://localhost:8080.
+- If `curl` to `/api/state` fails and scripts also error out, say the server is unavailable and suggest the explicit `nohup npm start …` line above.
+- If `scsynth` or `sclang` are missing from `PATH`, say clearly that SuperCollider must be installed system-wide first — do not attempt workarounds.
