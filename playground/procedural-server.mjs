@@ -10,22 +10,54 @@ if (!existsSync(fileURLToPath(distUrl))) {
   process.exit(1);
 }
 
-const { createProceduralEngine, MOOD_PALETTES } = await import(distUrl.href);
+const {
+  createProceduralEngine,
+  MOOD_PALETTES,
+  PROCEDURAL_STYLE_PROFILES,
+} = await import(distUrl.href);
 
 const SAMPLE_RATE = 48_000;
 const CHANNELS = 2;
 const FRAMES_PER_CHUNK = 4_800; // 100 ms @ 48 kHz
 const CHUNK_INTERVAL_MS = Math.round((FRAMES_PER_CHUNK / SAMPLE_RATE) * 1000);
 const VALID_MOODS = new Set(Object.keys(MOOD_PALETTES));
+const VALID_STYLES = new Set(Object.keys(PROCEDURAL_STYLE_PROFILES));
+
+const RANDOM_SCENES = [
+  { genre: "Ambient drift", style: "ambient-wash", moods: ["calming", "neutral", "deep-focus"], intensity: [0.04, 0.28] },
+  { genre: "Synthwave night drive", style: "synthwave-drive", moods: ["flow", "uplift", "deep-focus"], intensity: [0.52, 0.88] },
+  { genre: "Dub techno chamber", style: "dub-tech", moods: ["deep-focus", "neutral", "flow"], intensity: [0.34, 0.72] },
+  { genre: "Noir jazz lounge", style: "noir-waltz", moods: ["calming", "neutral", "deep-focus"], intensity: [0.18, 0.54] },
+  { genre: "Arcade rush", style: "arcade-sprint", moods: ["uplift", "flow"], intensity: [0.72, 0.98] },
+  { genre: "Cosmic drone field", style: "cosmic-drone", moods: ["neutral", "calming"], intensity: [0.03, 0.24] },
+];
 
 let engine = null;
+let currentScene = randomScene();
+
+function buildEngine(scene) {
+  return createProceduralEngine({
+    mood: scene.mood,
+    style: scene.style,
+    sampleRate: SAMPLE_RATE,
+    intensity: scene.intensity,
+    seed: scene.seed,
+  });
+}
+
 function ensureEngine() {
   if (engine) return engine;
-  engine = createProceduralEngine({
-    mood: "flow",
-    sampleRate: SAMPLE_RATE,
-    intensity: 0.5,
-  });
+  engine = buildEngine(currentScene);
+  return engine;
+}
+
+function replaceEngine(scene) {
+  currentScene = {
+    ...scene,
+    intensity: clamp01(scene.intensity ?? 0.5),
+    seed: (scene.seed ?? ((Math.random() * 0xffff_ffff) >>> 0)) >>> 0,
+  };
+  engine = buildEngine(currentScene);
   return engine;
 }
 
@@ -46,6 +78,12 @@ const server = createServer(async (req, res) => {
     }
   }
 
+  if (req.method === "POST" && url.pathname === "/randomize") {
+    const scene = randomScene();
+    replaceEngine(scene);
+    return sendJson(res, 200, { ok: true, state: snapshot() });
+  }
+
   sendJson(res, 404, { ok: false, error: "Not found" });
 });
 
@@ -64,11 +102,11 @@ function streamAudio(res) {
     "Access-Control-Allow-Origin": "*",
   });
   res.write(streamingWavHeader(SAMPLE_RATE, CHANNELS));
-  const eng = ensureEngine();
   const pcm = new Float32Array(FRAMES_PER_CHUNK * CHANNELS);
   const out = Buffer.allocUnsafe(FRAMES_PER_CHUNK * CHANNELS * 2);
 
   const tick = () => {
+    const eng = ensureEngine();
     eng.renderInto(pcm, FRAMES_PER_CHUNK, CHANNELS);
     for (let i = 0; i < pcm.length; i += 1) {
       const v = pcm[i];
@@ -105,21 +143,50 @@ function streamingWavHeader(sampleRate, channels) {
 
 function applyCommand(cmd) {
   if (!cmd || typeof cmd !== "object") throw new Error("Command must be a JSON object");
+  if (cmd.randomize === true) {
+    replaceEngine(randomScene());
+    return;
+  }
   const eng = ensureEngine();
   if (typeof cmd.mood === "string" && VALID_MOODS.has(cmd.mood)) {
     eng.setMood(cmd.mood);
+    currentScene.mood = cmd.mood;
+  }
+  if (typeof cmd.style === "string" && VALID_STYLES.has(cmd.style)) {
+    eng.setStyle(cmd.style);
+    currentScene.style = cmd.style;
+    currentScene.genre = PROCEDURAL_STYLE_PROFILES[cmd.style].label;
   }
   if (typeof cmd.intensity === "number" && Number.isFinite(cmd.intensity)) {
     const transitionMs = typeof cmd.transitionMs === "number" ? cmd.transitionMs : 180;
     eng.setIntensity(cmd.intensity, transitionMs);
+    currentScene.intensity = clamp01(cmd.intensity);
   }
   if (typeof cmd.seed === "number" && Number.isFinite(cmd.seed)) {
-    eng.setSeed(cmd.seed >>> 0);
+    currentScene.seed = cmd.seed >>> 0;
+    replaceEngine(currentScene);
   }
 }
 
+function randomScene() {
+  const base = RANDOM_SCENES[(Math.random() * RANDOM_SCENES.length) | 0];
+  const mood = base.moods[(Math.random() * base.moods.length) | 0];
+  const intensity = lerp(base.intensity[0], base.intensity[1], Math.random());
+  return {
+    genre: base.genre,
+    style: base.style,
+    mood,
+    intensity,
+    seed: (Math.random() * 0xffff_ffff) >>> 0,
+  };
+}
+
 function snapshot() {
-  return ensureEngine().state;
+  const state = ensureEngine().state;
+  return {
+    ...state,
+    genre: currentScene.genre,
+  };
 }
 
 function sendJson(res, status, payload) {
@@ -163,6 +230,14 @@ function readJsonBody(req) {
   });
 }
 
+function clamp01(v) {
+  return Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
 const HOME_HTML = `<!doctype html>
 <html lang="en">
 <head>
@@ -179,6 +254,7 @@ const HOME_HTML = `<!doctype html>
       --text: #ecf2ff;
       --muted: #98a7c3;
       --accent: #8ea3ff;
+      --accent-2: #8effd4;
       --accent-dim: #8ea3ff33;
     }
     * { box-sizing: border-box; }
@@ -194,27 +270,49 @@ const HOME_HTML = `<!doctype html>
       display: grid;
       place-items: center;
     }
-    .wrap { width: 100%; max-width: 520px; display: grid; gap: 28px; }
-    h1 { margin: 0; font-size: 22px; font-weight: 500; letter-spacing: 0.02em; opacity: 0.85; }
+    .wrap { width: 100%; max-width: 620px; display: grid; gap: 20px; }
+    h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.9; }
     .subtitle { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
 
-    .moods { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
-    .moods button {
+    .toolbar {
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    }
+    button.primary, .moods button {
       background: transparent;
       border: 1px solid var(--stroke);
       color: var(--text);
-      padding: 12px 4px;
-      border-radius: 10px;
-      font-size: 12px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 13px;
       letter-spacing: 0.02em;
       cursor: pointer;
-      transition: background 120ms, border-color 120ms;
+      transition: background 120ms, border-color 120ms, transform 120ms;
     }
+    button.primary {
+      background: linear-gradient(180deg, #91a6ff30, #91a6ff18);
+      border-color: #9eb0ff88;
+      font-weight: 600;
+    }
+    button.primary:hover, .moods button:hover { border-color: #ffffff66; transform: translateY(-1px); }
+
+    .hero {
+      display: grid; gap: 12px;
+      padding: 20px;
+      border: 1px solid var(--stroke);
+      border-radius: 16px;
+      background: var(--card);
+    }
+    .genre {
+      display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: baseline;
+    }
+    .genre strong { font-size: 22px; color: var(--accent-2); }
+    .genre small { color: var(--muted); }
+
+    .moods { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
     .moods button.active {
       background: var(--accent-dim);
       border-color: var(--accent);
     }
-    .moods button:hover:not(.active) { border-color: #ffffff55; }
 
     .intensity {
       display: grid; gap: 10px;
@@ -224,7 +322,7 @@ const HOME_HTML = `<!doctype html>
       background: var(--card);
     }
     .intensity-head { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
-    .intensity-head strong { color: var(--text); font-weight: 500; }
+    .intensity-head strong { color: var(--text); font-weight: 600; }
     input[type="range"] { width: 100%; accent-color: var(--accent); }
 
     audio { width: 100%; border-radius: 999px; }
@@ -235,17 +333,28 @@ const HOME_HTML = `<!doctype html>
       display: flex; gap: 16px; flex-wrap: wrap;
       justify-content: center;
     }
-    .state span strong { color: var(--text); font-weight: 500; }
+    .state span strong { color: var(--text); font-weight: 600; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div>
-      <h1>Beatly</h1>
-      <p class="subtitle">Procedural soundscape — stereo 48 kHz. Pick a mood, nudge intensity.</p>
+      <h1>Beatly playground</h1>
+      <p class="subtitle">Hit <strong>Random genre</strong> to rebuild the engine with a new style, mood, intensity, and seed.</p>
     </div>
 
-    <audio id="audio" controls autoplay src="/audio"></audio>
+    <div class="hero">
+      <div class="genre">
+        <div>
+          <small>current scene</small><br />
+          <strong id="genre">Synthwave drive</strong>
+        </div>
+        <div class="toolbar">
+          <button class="primary" id="randomize">🎲 Random genre</button>
+        </div>
+      </div>
+      <audio id="audio" controls autoplay src="/audio"></audio>
+    </div>
 
     <div class="moods" id="moods"></div>
 
@@ -265,10 +374,19 @@ const HOME_HTML = `<!doctype html>
     let currentMood = "flow";
     let currentIntensity = 0.5;
 
+    const audio = document.getElementById("audio");
+    const genreNode = document.getElementById("genre");
     const moodsWrap = document.getElementById("moods");
     const intensity = document.getElementById("intensity");
     const intensityValue = document.getElementById("intensity-value");
     const stateNode = document.getElementById("state");
+
+    function reloadAudio() {
+      const wasPlaying = !audio.paused;
+      audio.src = "/audio?t=" + Date.now();
+      audio.load();
+      if (wasPlaying) audio.play().catch(() => {});
+    }
 
     MOODS.forEach((m) => {
       const b = document.createElement("button");
@@ -291,6 +409,12 @@ const HOME_HTML = `<!doctype html>
       pushTimer = setTimeout(push, 120);
     });
 
+    document.getElementById("randomize").addEventListener("click", async () => {
+      const r = await fetch("/randomize", { method: "POST" }).then((res) => res.json());
+      syncFromState(r.state);
+      reloadAudio();
+    });
+
     async function push() {
       await fetch("/command", {
         method: "POST",
@@ -298,19 +422,31 @@ const HOME_HTML = `<!doctype html>
         body: JSON.stringify({
           mood: currentMood,
           intensity: currentIntensity,
-          transitionMs: 180,
+          transitionMs: 220,
         }),
       });
+    }
+
+    function syncFromState(s) {
+      if (!s) return;
+      currentMood = s.mood;
+      currentIntensity = Number(s.intensity ?? currentIntensity);
+      intensity.value = currentIntensity.toFixed(2);
+      intensityValue.textContent = currentIntensity.toFixed(2);
+      genreNode.textContent = s.genre || s.styleLabel || s.style || "Unknown";
+      for (const el of moodsWrap.children) el.classList.toggle("active", el.dataset.mood === currentMood);
+      stateNode.innerHTML =
+        '<span>mood <strong>' + s.mood + '</strong></span>' +
+        '<span>style <strong>' + (s.styleLabel || s.style) + '</strong></span>' +
+        '<span>bar <strong>' + s.bar + '</strong></span>' +
+        '<span>tempo <strong>' + s.tempoBpm.toFixed(1) + '</strong> bpm</span>' +
+        '<span>seed <strong>' + s.seed.toString(16) + '</strong></span>';
     }
 
     async function refreshState() {
       try {
         const s = await fetch("/state").then((r) => r.json());
-        stateNode.innerHTML =
-          '<span>mood <strong>' + s.mood + '</strong></span>' +
-          '<span>bar <strong>' + s.bar + '</strong></span>' +
-          '<span>tempo <strong>' + s.tempoBpm.toFixed(1) + '</strong> bpm</span>' +
-          '<span>seed <strong>' + s.seed.toString(16) + '</strong></span>';
+        syncFromState(s);
       } catch {}
     }
 

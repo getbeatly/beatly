@@ -14,11 +14,13 @@ export {
   createProceduralEngine,
   renderProceduralPcm,
   renderProceduralWav,
+  PROCEDURAL_STYLE_PROFILES,
   type ProceduralEngine,
   type ProceduralEngineOptions,
   type ProceduralEngineState,
   type ProceduralRenderOptions,
   type ProceduralRenderResult,
+  type ProceduralStyleId,
 } from "./engine.js";
 
 export { createPrng, createStream, deriveStreamSeed, defaultSessionSeed } from "./prng.js";

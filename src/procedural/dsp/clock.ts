@@ -34,12 +34,15 @@ export interface TempoClock {
   readonly beatInBar: number;
   /** Seconds per beat at the current tempo. */
   readonly secondsPerBeat: number;
+  /** Retune the clock's base tempo; drift continues around the new centre. */
+  setBaseBpm(nextBpm: number): void;
   /** Advance by N audio frames; returns true iff a bar boundary was crossed. */
   advance(frames: number): boolean;
 }
 
 export function createTempoClock(opts: TempoClockOptions): TempoClock {
   const beatsPerBar = opts.beatsPerBar ?? 4;
+  let baseBpm = opts.initialBpm;
   let bpm = opts.initialBpm;
   let targetBpm = opts.initialBpm;
   let beat = 0;
@@ -67,6 +70,15 @@ export function createTempoClock(opts: TempoClockOptions): TempoClock {
     get secondsPerBeat() {
       return 60 / bpm;
     },
+    setBaseBpm(nextBpm: number) {
+      baseBpm = nextBpm;
+      targetBpm = clamp(targetBpm, baseBpm - (opts.drift?.rangeBpm ?? 0), baseBpm + (opts.drift?.rangeBpm ?? 0));
+      bpm = clamp(bpm, baseBpm - (opts.drift?.rangeBpm ?? 0), baseBpm + (opts.drift?.rangeBpm ?? 0));
+      if (!opts.drift) {
+        targetBpm = baseBpm;
+        bpm = baseBpm;
+      }
+    },
     advance(frames: number) {
       // Smooth bpm toward target.
       bpm += (targetBpm - bpm) * 0.002;
@@ -86,13 +98,13 @@ export function createTempoClock(opts: TempoClockOptions): TempoClock {
           driftTimerFrames -= driftStepFrames;
           const { prng, rangeBpm, periodBars } = opts.drift;
           // Per-second walk step ~ range / (periodBars * secondsPerBar).
-          const secondsPerBar = (60 / opts.initialBpm) * beatsPerBar;
+          const secondsPerBar = (60 / baseBpm) * beatsPerBar;
           const perSecondStep = rangeBpm / (periodBars * secondsPerBar);
           const jitter = (prng.next() * 2 - 1) * perSecondStep;
           targetBpm = clamp(
             targetBpm + jitter,
-            opts.initialBpm - rangeBpm,
-            opts.initialBpm + rangeBpm,
+            baseBpm - rangeBpm,
+            baseBpm + rangeBpm,
           );
         }
       }
