@@ -1,19 +1,19 @@
 # @beatly/core
 
-Beatly now acts as a control layer for the SuperCollider setup in `../hello-supercollider`.
+Beatly now contains both the control layer and the SuperCollider runtime.
 
 ## What is in this repo now
 
 - agent-event entrypoint (`@beatly/core/skill`)
 - recommendation/conductor layer (`@beatly/core`)
-- adapter for controlling the sibling `hello-supercollider` server (`@beatly/core/adapters`)
-- genre catalog copied from the sibling project
-
-## What was removed
-
-- in-repo DSP/procedural audio code
-- in-repo live audio playground/server
-- old audio specs/docs for the removed renderer
+- adapter for controlling the bundled SuperCollider server (`@beatly/core/adapters`)
+- genre catalog copied from the original SuperCollider project
+- bundled runtime under `supercollider/`
+  - `server.js`
+  - `music.js`
+  - `.scd` sources
+  - `public/` UI
+  - `synthdefs/`
 
 ## Usage
 
@@ -24,7 +24,7 @@ import { createBeatlySkill } from "@beatly/core/skill";
 
 const adapter = new SuperColliderHelloAdapter({
   autostart: true,
-  serverCwd: "../hello-supercollider",
+  serverCwd: "./supercollider",
 });
 
 await adapter.ensureReady();
@@ -38,8 +38,20 @@ await skill.handleEvent({ type: "task.completed" });
 await skill.stop("done");
 ```
 
+## Runtime commands
+
+```bash
+npm start
+npm run sc:start
+npm run sc:build
+npm run sc:live
+npm run sc:generate
+```
+
 ## Notes
 
-- `SuperColliderHelloAdapter` talks to the HTTP API exposed by `../hello-supercollider/server.js`.
-- If `autostart: true`, this package can spawn that server for you.
+- `npm start` runs the main server, which spawns `scsynth`, serves the playground UI, and accepts control + agent-event HTTP commands.
+- `SuperColliderHelloAdapter` talks to the HTTP API exposed by `supercollider/server.js`.
+- Agent/event endpoints: `POST /api/agent` and `POST /api/event`.
+- Playground/control endpoints: `POST /api/control` and `POST /api/command`.
 - Supported genres copied over: `ambient`, `calming`, `deepFocus`, `lofi`, `jazzNoir`, `techno`, `dnb`, `dub`, `uplift`, `neoSoul`.

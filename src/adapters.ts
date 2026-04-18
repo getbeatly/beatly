@@ -26,7 +26,7 @@ export interface SuperColliderHelloAdapterOptions {
 }
 
 export class SuperColliderHelloAdapter {
-  public readonly id = "hello-supercollider";
+  public readonly id = "beatly-supercollider";
 
   private readonly baseUrl: string;
   private readonly autostart: boolean;
@@ -41,7 +41,7 @@ export class SuperColliderHelloAdapter {
   constructor(options: SuperColliderHelloAdapterOptions = {}) {
     this.baseUrl = options.baseUrl ?? "http://127.0.0.1:8080";
     this.autostart = options.autostart ?? false;
-    this.serverCwd = resolve(options.serverCwd ?? "../hello-supercollider");
+    this.serverCwd = resolve(options.serverCwd ?? "./supercollider");
     this.serverScript = options.serverScript ?? "server.js";
     this.spawnCommand = options.spawnCommand ?? "node";
     this.spawnArgs = options.spawnArgs ?? [this.serverScript];

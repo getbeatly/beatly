@@ -1,7 +1,7 @@
 {
   "name": "@beatly/core",
   "version": "0.0.1",
-  "description": "Beatly control layer for a sibling SuperCollider runtime.",
+  "description": "Beatly control layer and bundled SuperCollider runtime.",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -32,6 +32,7 @@
   },
   "files": [
     "dist",
+    "supercollider",
     "README.md",
     "LICENSE"
   ],
@@ -39,6 +40,11 @@
     "clean": "rm -rf dist",
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node supercollider/server.js",
+    "sc:start": "node supercollider/server.js",
+    "sc:build": "sclang supercollider/build_synthdefs.scd",
+    "sc:live": "sclang supercollider/play_beat.scd",
+    "sc:generate": "sclang supercollider/generate.scd",
     "event": "npm run build && node dist/cli.js",
     "prepublishOnly": "npm run build"
   },
@@ -49,6 +55,9 @@
     "music",
     "supercollider"
   ],
+  "dependencies": {
+    "osc": "^2.4.5"
+  },
   "devDependencies": {
     "@types/node": "^22.15.3",
     "typescript": "^5.8.0"

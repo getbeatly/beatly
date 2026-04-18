@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>SC Jukebox</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; background: #111; color: #eee;
+         max-width: 640px; margin: 40px auto; padding: 0 20px; }
+  h1 { font-weight: 600; letter-spacing: -0.01em; }
+  button { font: inherit; padding: 10px 16px; margin: 4px 6px 4px 0;
+           background: #2a2a2a; color: #eee; border: 1px solid #444;
+           border-radius: 6px; cursor: pointer; }
+  button:hover { background: #3a3a3a; }
+  button.active { background: #4a7; border-color: #6c9; color: #021; }
+  .row { margin: 16px 0; }
+  pre { background: #1b1b1b; padding: 12px; border-radius: 6px;
+        border: 1px solid #2a2a2a; font-size: 13px; }
+  label { color: #888; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }
+</style>
+</head>
+<body>
+  <h1>🎛️  SuperCollider Jukebox</h1>
+
+  <div class="row">
+    <label>Genre</label><br>
+    <div id="profiles"></div>
+  </div>
+
+  <div class="row">
+    <label>Randomness</label><br>
+    <button id="randomize">🎲 Randomize</button>
+    <button id="panic">⏹ Panic (free all)</button>
+  </div>
+
+  <div class="row">
+    <label>State</label>
+    <pre id="state">…</pre>
+  </div>
+
+<script>
+async function api(path, body) {
+  const opt = body
+    ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
+    : {};
+  const r = await fetch(path, opt);
+  return r.json();
+}
+
+let lastState = null;
+
+async function refresh() {
+  const s = await api('/api/state');
+  lastState = s;
+  document.getElementById('state').textContent = JSON.stringify(s, null, 2);
+  const wrap = document.getElementById('profiles');
+  if (wrap.childElementCount !== s.profiles.length) {
+    wrap.innerHTML = '';
+    for (const id of s.profiles) {
+      const b = document.createElement('button');
+      b.textContent = id;
+      b.dataset.id = id;
+      b.onclick = () => api('/api/control', { profile: id }).then(refresh);
+      wrap.appendChild(b);
+    }
+  }
+  for (const b of wrap.children) {
+    b.classList.toggle('active', b.dataset.id === s.profile);
+  }
+}
+
+document.getElementById('randomize').onclick = () =>
+  api('/api/control', { randomize: true }).then(refresh);
+document.getElementById('panic').onclick = () =>
+  api('/api/panic', {}).then(refresh);
+
+refresh();
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>
