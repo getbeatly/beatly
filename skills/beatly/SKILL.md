@@ -1,143 +1,68 @@
 ---
 name: beatly
-description: Control the local Beatly SuperCollider soundtrack server. Use when you want soundtrack playback updates based on agent activity, to send agent events or status updates, inspect Beatly state, or manually override genre and playback.
+description: Play a live, generative background soundtrack while you work. Beatly gives any coding agent a local music server whose mood follows what the agent is actually doing — thinking, coding, blocked, shipping — and lets the agent pick the vibe itself.
 ---
 
 # Beatly
 
-Use this skill when you want the coding soundtrack to react to agent activity or when you want direct control over Beatly playback.
+Beatly lets any coding agent run a nice background soundtrack while it works, and lets the agent choose what's playing based on its current mood and whatever is going on in the task right now.
 
-This skill should be used in a way that matches the Beatly product design from `beatly.dev`: a live soundtrack for coding agents, reactive to events in real time, with clear user-facing mood control.
+- **Starting a long task?** pick something focused.
+- **Stuck or blocked?** ease off to something calming.
+- **Tests just went green?** celebrate with something energetic.
+- **Just idle?** ambient.
 
-## What this skill controls
+You don't narrate the music to the user unless they ask — just keep the vibe matched to the work.
 
-A local Beatly server at `http://127.0.0.1:8080`, which:
-- spawns `scsynth`
-- serves the local jukebox/playground UI (open it at http://localhost:8080)
-- accepts direct control commands
-- accepts agent event commands
+## How it runs
 
-## Paths
+The skill talks to a local Beatly server (spawns `scsynth`, serves a jukebox UI at `http://localhost:8080`). The server **autostarts on first use** — just call the script you want. SuperCollider must be installed system-wide (`scsynth` and `sclang` on `PATH`); if it isn't, say so and stop.
 
-All scripts live here and can be invoked by **absolute path from any cwd**:
+## The four scripts
 
-```
-/home/yuval/dev/beatly/skills/beatly/state.sh
-/home/yuval/dev/beatly/skills/beatly/event.sh
-/home/yuval/dev/beatly/skills/beatly/update.sh
-/home/yuval/dev/beatly/skills/beatly/override.sh
-```
+All scripts live in this skill directory. Call them by path.
 
-Runtime root (the repo with `dist/` and `supercollider/`): `/home/yuval/dev/beatly`
+| Script | Use it when |
+| :--- | :--- |
+| `./state.sh` | You need the current genre/variant/bpm, or the full list of genres and their variants. |
+| `./event.sh <event>` | A lifecycle thing happened. Events: `task.started`, `task.blocked`, `task.completed`, `agent.idle`, `agent.error`, `agent.breakthrough`. |
+| `./update.sh <status> [summary] [focus] [load] [energy]` | You want a nuanced mood change. Status: `thinking`, `coding`, `reviewing`, `waiting`, `celebrating`. Focus/load/energy are optional 0..1 floats. |
+| `./override.sh <genre[.variant]> [running] [seed] [variant]` | The user asked for something specific, or you want an exact vibe. `running=false` pauses. |
 
-## Requirements
-
-SuperCollider must be installed system-wide: both `scsynth` and `sclang` must be on `PATH`. If either is missing, stop and tell the user clearly.
-
-## Starting the server
-
-**You usually do not need to start the server manually.** The first call to any of the four scripts (`state.sh`, `event.sh`, `update.sh`, `override.sh`) will autostart the server via `SuperColliderHelloAdapter({ autostart: true })` in `driver.mjs`. Just call the script you actually want.
-
-To check whether it's already up without side effects:
+Examples:
 
 ```bash
-curl -sf http://127.0.0.1:8080/api/state >/dev/null && echo up || echo down
+./event.sh task.started
+./update.sh thinking "Planning the refactor" 0.72 0.62 0.38
+./override.sh lofi.night true
+./override.sh ambient false          # pause
+./state.sh
 ```
 
-If you want to start it explicitly in the background (e.g. to watch logs):
+Every call returns the new server state as JSON (`genre`, `variant`, `bpm`, `running`, …).
 
-```bash
-cd /home/yuval/dev/beatly
-nohup npm start >/tmp/beatly.log 2>&1 & disown
-# then: tail -f /tmp/beatly.log
-```
+## Picking music
 
-## Stopping the server
-
-There is no shutdown HTTP endpoint. The node process title is `node supercollider/server.js` (it does **not** contain "beatly"), so a naive `pkill -f beatly` will miss it. Use:
-
-```bash
-pkill -f 'supercollider/server.js'   # kills the node server; scsynth exits with it
-# verify:
-pgrep -af 'supercollider/server.js|scsynth'
-```
-
-## Commands
-
-### Send a discrete agent event
-
-```bash
-/home/yuval/dev/beatly/skills/beatly/event.sh task.started
-/home/yuval/dev/beatly/skills/beatly/event.sh task.blocked
-/home/yuval/dev/beatly/skills/beatly/event.sh task.completed
-/home/yuval/dev/beatly/skills/beatly/event.sh agent.idle
-/home/yuval/dev/beatly/skills/beatly/event.sh agent.error
-/home/yuval/dev/beatly/skills/beatly/event.sh agent.breakthrough
-```
-
-### Send a richer status update
-
-```bash
-/home/yuval/dev/beatly/skills/beatly/update.sh coding "Implementing feature"
-/home/yuval/dev/beatly/skills/beatly/update.sh thinking "Planning refactor" 0.72 0.62 0.38
-```
-
-Arguments for `update.sh`:
-1. status: `thinking|coding|reviewing|waiting|celebrating`
-2. summary: optional
-3. focus: optional 0..1
-4. cognitiveLoad: optional 0..1
-5. energy: optional 0..1
-
-### Manual override
-
-```bash
-/home/yuval/dev/beatly/skills/beatly/override.sh lofi true
-/home/yuval/dev/beatly/skills/beatly/override.sh lofi.night true
-/home/yuval/dev/beatly/skills/beatly/override.sh ambient true 12345 cathedral
-```
-
-Arguments for `override.sh`:
-1. genre (`lofi`) or full `genre.variant` (`lofi.night`)
-2. running: `true|false`
-3. seed: optional integer
-4. variant: optional (if not already baked into arg 1)
-
-Each genre has several named variants (e.g. `lofi` → `classic`, `night`, `crate`, `sunday`, `jazzy`, `tape`). Inspect them via `./state.sh` — the response includes a `genres` array with each genre's variants.
-
-### Inspect state
-
-```bash
-/home/yuval/dev/beatly/skills/beatly/state.sh
-```
-
-Returns JSON of shape:
+Each genre has 5–6 named variants you can target. Get the live list from `./state.sh` — it includes a `genres` array like:
 
 ```json
-{
-  "profile": "sunsetGroove.golden",
-  "genre": "sunsetGroove",
-  "variant": "golden",
-  "seed": 701337117,
-  "bpm": 108,
-  "bar": 1,
-  "running": true,
-  "profiles": ["ambient.classic", "ambient.abyss", "..."],
-  "genres": [
-    { "id": "lofi", "defaultVariant": "classic", "variants": ["classic", "night", "crate", "sunday", "jazzy", "tape"] }
-  ],
-  "lastAgentEvent": null
-}
+{ "id": "lofi", "defaultVariant": "classic",
+  "variants": ["classic", "night", "crate", "sunday", "jazzy", "tape"] }
 ```
 
-The `genres` array is the canonical list of valid genres and their variants. The `profiles` array lists every `genre.variant` combination directly.
+Rough mood map to start from — the agent should adapt, not stick rigidly:
 
-## Preferred behavior
+- **Focused reading/thinking** → `deepFocus`, `lofi`, `dreamPop`, `rainyPiano`
+- **Actively writing code** → `lofi`, `soulHop`, `neoSoul`, `cityPop`, `chillHouse`
+- **Crunch / momentum** → `techno`, `dnb`, `uplift`
+- **Blocked / reset** → `calming`, `ambient`, `dub`
+- **Celebrating / shipped** → `uplift`, `cityPop`, `sunsetGroove`
+- **Idle / background** → `ambient`, `rainyPiano`
 
-- For task lifecycle changes, prefer `event.sh`.
-- For nuanced progress reports from an agent, prefer `update.sh`.
-- For explicit user requests like "play lofi" or "stop music", prefer `override.sh` (use `override.sh <genre> false` to pause).
-- After sending a command, summarize the returned state briefly (profile, bpm, running).
-- Remind the user once per session that the jukebox UI lives at http://localhost:8080.
-- If `curl` to `/api/state` fails and scripts also error out, say the server is unavailable and suggest the explicit `nohup npm start …` line above.
-- If `scsynth` or `sclang` are missing from `PATH`, say clearly that SuperCollider must be installed system-wide first — do not attempt workarounds.
+## Preferences
+
+- Prefer `event.sh` for lifecycle beats, `update.sh` for in-flight mood shifts, `override.sh` only when the user asks directly or you want a specific variant.
+- After a command, summarize the result in one short line (`now playing lofi.night @ 72bpm`).
+- Mention the jukebox UI (`http://localhost:8080`) once per session so the user knows they can steer it manually.
+- If a script errors with the server unreachable, try it once more (autostart takes a couple of seconds). If it still fails, say the server is unavailable.
+- If `scsynth` / `sclang` are missing, tell the user to install SuperCollider system-wide. Don't try to work around it.
