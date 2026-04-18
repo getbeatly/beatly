@@ -1,4 +1,4 @@
-# @beatly/core
+# Beatly
 
 > A live, generative soundtrack for coding agents. See [beatly.dev](https://beatly.dev).
 
